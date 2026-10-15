@@ -1,37 +1,44 @@
-# Lazyportal
+# LazyPortal
 
-The official portal (`studentportal.juet.ac.in/studentportal/`) forgets you on every visit. It wipes `localStorage` when the login page loads, and its token refresh never saves the new token. So you solve a captcha and type your password daily for no reason.
+Just a better alternative to JUET student portal (`studentportal.juet.ac.in`).
 
-This repo logs in once through the same API, keeps the token in its own storage keys, and gives you a readable dashboard. Captcha is still required for the login; lazyportal tries to solve it for you.
+## Why?
 
-## Run it
+The official portal forgets you on every visit and forces you to type your password and solve a captcha every single day for no reason.
+
+**LazyPortal fixes that:**
+- **Persistent sessions:** Log in once and stay logged in.
+- **Auto-captcha:** Automatically attempts to solve the captcha for you.
+- **Better UI:** It's just better. believe me.
+- **Native Android support:** Ships as a lightweight Capacitor build.
+
+## Download
+
+get the latest release: [**GitHub Releases**](../../releases).
+
+## Development
+
+### Web
+
+Local dev proxies `/api` to the portal since the upstream server only accepts requests from its own origin.
 
 ```sh
 npm install
-npm test                          # core + web + proxy tests
-npm --workspace @juet/web run dev # then open http://localhost:5173
+npm test
+npm --workspace @juet/web run dev
 ```
 
-Local dev proxies `/api` to the portal, since the portal only accepts its own origin.
+### Android
 
-## Android app
-
-The same web build also ships as a native Android app (`com.lazyportal.juet`)
-via Capacitor.
+The web bundle compiles directly into a native Android app via Capacitor:
 
 ```sh
-npm run cap:sync    # build web bundle + copy into android/
-npm run android:apk # ...and compile app-debug.apk
+npm run cap:sync    # build and sync to android/
+npm run android:apk # compile app-debug.apk
 ```
 
-Icons, splash, API routing and release signing: [docs/ANDROID.md](docs/ANDROID.md).
-CI builds a debug APK on pushes to `master`, pull requests, and manual runs
-(`.github/workflows/build-apk.yml`). Pushing a `v*` tag additionally builds a
-signed release APK and publishes it to GitHub Releases after signing secrets
-are configured.
+## Notes & Disclaimer
 
-## Notes
-
-- Password is saved in your device locally only if you tick Remember me.
+- You're totally anonymous to us. your credentials are saved on your device.
 - MIT. Nothing to do with JUET or JIL.
 - I slopped it for me and myself only; expect nothing.
