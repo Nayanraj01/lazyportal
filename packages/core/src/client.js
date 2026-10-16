@@ -2,9 +2,8 @@
 // Hides baseUrl, AES body encryption, Auth+LocalName headers, error mapping,
 // and transparent session refresh: a 401 triggers one shared refresh + retry,
 // so callers only see SessionExpiredError when refresh truly fails.
-// post = AES-encrypted JSON body. postRaw = plain JSON body (some endpoints
-// take unencrypted JSON: fee summary, attendance LOV, personal info, service
-// requests, medical info, hostel, photo window, token refresh).
+// post = AES-encrypted JSON body. postRaw = plain JSON body (attendance LOV,
+// token refresh are the live unencrypted callers).
 // getPublic = auth-free GET.
 
 import { encrypt, makeLocalName } from "./crypto.js";
@@ -321,39 +320,38 @@ export function createClient({
     return body;
   }
 
+  async function dispatch(endpoint, build, opts) {
+    const { response, sent } = await fetchSent({ endpoint, build });
+    return handle(response, sent, opts);
+  }
+
   return {
-    async post(endpoint, payloadObj, opts = {}) {
-      const build = async () => ({
+    post(endpoint, payloadObj, opts = {}) {
+      return dispatch(endpoint, async () => ({
         method: "POST",
         headers: await headers(),
         body: await encrypt(JSON.stringify(payloadObj), { now: now() }),
         ...(opts.signal ? { signal: opts.signal } : {}),
-      });
-      const { response, sent } = await fetchSent({ endpoint, build });
-      return handle(response, sent, opts);
+      }), opts);
     },
     /** Raw POST: same headers, plain JSON body (some endpoints take unencrypted JSON). */
-    async postRaw(endpoint, payloadObj, opts = {}) {
-      const build = async () => ({
+    postRaw(endpoint, payloadObj, opts = {}) {
+      return dispatch(endpoint, async () => ({
         method: "POST",
         headers: await headers(),
         body: JSON.stringify(payloadObj),
         ...(opts.signal ? { signal: opts.signal } : {}),
-      });
-      const { response, sent } = await fetchSent({ endpoint, build });
-      return handle(response, sent, opts);
+      }), opts);
     },
     /** Public GET: no Auth/LocalName/Content-Type, so no CORS preflight.
      * Use for unauthenticated endpoints (captcha, logo, marquee).
      * Silent by default: a 401 here is not a session expiry (e.g. captcha
      * fetch failing inside silent re-login must not fire global logout). */
-    async getPublic(endpoint, opts = {}) {
-      const build = async () => ({
+    getPublic(endpoint, opts = {}) {
+      return dispatch(endpoint, async () => ({
         headers: { Accept: "application/json" },
         ...(opts.signal ? { signal: opts.signal } : {}),
-      });
-      const { response, sent } = await fetchSent({ endpoint, build });
-      return handle(response, sent, { skipRefresh: true, silent: true, ...opts });
+      }), { skipRefresh: true, silent: true, ...opts });
     },
     /** Abort a background recovery after an explicit session save/logout. */
     cancelRefresh,

@@ -1,6 +1,6 @@
 # Architecture
 
-Small interfaces, everything tricky behind them. Each module below earns its place: delete it and every caller re-implements the same logic.
+Small interfaces, everything tricky behind them.
 
 ## Core (`packages/core`, zero dependencies)
 
@@ -11,20 +11,17 @@ Small interfaces, everything tricky behind them. Each module below earns its pla
 | `session.js` | `createStore`, `memoryAdapter`, `browserLocalAdapter`, `isExpired` | JWT expiry checks, `juet.portal.*` key names |
 | `client.js` | `createClient` gives `{post, postRaw, getPublic}` | AES bodies, `Authorization` + `LocalName` headers, 401 mapping. `postRaw`/`getPublic` exist because some endpoints take plain JSON or no auth headers |
 | `auth.js` | `fetchCaptcha`, `login` | The two-step login, single-use `random`, parent `P` prefix |
-| `features.js` | `getAttendance*` (+`fetchSubjectAttendance`/`getSubjectAttendanceAll`), `getMarks*`, `getExam*`, `getGrade*`, `getSgpa*`, `getChoice*`, `getFacultyRegistrations`/`getFaculties`, `getFeeSummary`, `getPayslipDues`, `getFeeEvents`, `getPersonalInfo`, `getMedicalInfo`, `getPendingServiceRequests` + approved/closed/paid/withdrawn/cancelled | Endpoint paths and payload shapes (read-only views, no payments) |
+| `features.js` | `getAttendance*` (+`fetchSubjectAttendance`/`getSubjectAttendanceAll`), `getMarks*`, `getExam*`, `getGrade*`, `getSgpa*`, `getChoice*`, `getFacultyRegistrations`/`getFaculties` | Endpoint paths and payload shapes (read-only views, no payments) |
 
 Tests inject the clock, random source, storage, and fetch, so nothing touches the network.
 
-### Session recovery transitions
+### Session recovery
 
-`client.js` owns the shared recovery lifecycle: `authenticated → recovering → authenticated`
-when renewal succeeds, or `authenticated → recovering → expired` when it gives up.
-Concurrent 401s join the same attempt; a late 401 reuses a token another request
-already renewed. The 90-second guard aborts the silent refresh/captcha/login work
-before publishing `expired`. A failed token is not silently retried again in the
-background; explicit session save/logout cancels and invalidates any old attempt.
-The portal's HTTP 200 `Failure` session-expired payload follows the same path as
-HTTP 401.
+`client.js`: `authenticated → recovering → authenticated|expired`. Concurrent 401s
+share one refresh attempt; a late 401 reuses a token that attempt already renewed.
+A 90-second guard aborts stuck refresh/captcha/login work before publishing
+`expired`. The portal's HTTP 200 `Failure` session-expired payload follows the
+same path as HTTP 401.
 
 ## Web (`packages/web`)
 
@@ -44,29 +41,29 @@ pages/LoginPage.tsx # captcha, login once, save session
 pages/DashboardPage.tsx # header, anchor nav, registry render (skips enabled:false)
 ```
 
-To turn a section off, set `enabled: false` in `sections/index.ts`
-(grades/CGPA ship disabled: new portal returns 500/empty even officially).
-To drop it, delete its line + file. To add one, add a file plus one
-registry line and use `useSemester` for the semester pick. Nothing else changes.
+Grades/CGPA ship disabled (`enabled: false` in `sections/index.ts`: the new portal
+returns 500/empty even officially). New reads: check `main.*.js` for the
+`dataService.post("/xxx",…)` call and whether the call site encrypts — one
+function in `features.js` with a mocked-client test, then a section file plus one
+registry line. UI never imports `crypto`.
 
 ## Proxy (`api/`)
 
 | Module | What you call | What it hides |
 |---|---|---|
 | `proxy.js` | Vercel handler for `/api/:path*` | Origin/Referer spoofing, StudentPortalAPI path confinement, GET/HEAD/POST method allow-list, hop-by-hop header stripping, `rejectUnauthorized:false` scoped to the portal host, cookie relay, backpressure-aware response streaming, shared HTTPS idle pool, disconnect cancellation, timeout/502 mapping |
-| `shared/cors.js` | `corsHeaders`, `preflightHeaders` | The only origin allowed to call the proxy cross-origin: the Capacitor WebView (`https://localhost`). Browser builds are same-origin and need none of it |
+| `shared/cors.js` | `corsHeaders`, `preflightHeaders` | The only origin allowed cross-origin: the Capacitor shell's origin (`WEBVIEW_ORIGIN` ↔ `server.url`, a test asserts the sync). Browser builds are same-origin and need none of it |
 
-Proxy performance and Fluid Compute validation: [PERFORMANCE.md](PERFORMANCE.md).
+Performance design and Fluid validation: [PERFORMANCE.md](PERFORMANCE.md).
 
 ## Native shell (`android/`)
 
-Capacitor wraps the same `packages/web/dist` bundle; `packages/web/src/lib/apiBase.js`
-is the single place that knows the shell must call the hosted proxy by absolute
-URL instead of `/api`. Everything else — core, sections, hooks — is untouched by
-the native build. See `docs/ANDROID.md`.
+Capacitor wraps the same web bundle; `lib/apiBase.js` is the only place that
+knows the shell must call the hosted proxy by absolute URL instead of `/api`.
+Details in `docs/ANDROID.md`.
 
-## Adding a feature
+## Portal bundle
 
-Check `main.*.js` for the `dataService.post("/xxx",…)` call and whether the call site encrypts. Add one function in `features.js` with a mocked-client test, then call it from a page. UI never imports `crypto`.
-
-To get the bundle: open `https://studentportal.juet.ac.in/studentportal/`, find the `main.*.js` script URL in page source, download it, and grep. The class timetable does not exist there, only the exam-schedule endpoint, so don't promise one.
+To read an endpoint: open `https://studentportal.juet.ac.in/studentportal/`, find
+the `main.*.js` script URL in page source, download it, and grep. The class
+timetable does not exist there, only the exam-schedule endpoint.
