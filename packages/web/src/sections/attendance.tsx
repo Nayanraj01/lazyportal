@@ -14,12 +14,8 @@ import {
   parseIndianDateTime,
 } from "../components/DataViews";
 import {
-  type AttColorClass,
-  type BunkMargin,
   type ClassRecord,
-  type CombinedAttResult,
   cleanDateTime,
-  pct,
   getColorClass,
   computeBunkMargin,
   isSubjectDetailComplete,
@@ -27,19 +23,8 @@ import {
   combinedAttendance,
 } from "../lib/attendanceCalc";
 
-export {
-  type AttColorClass,
-  type BunkMargin,
-  type ClassRecord,
-  type CombinedAttResult,
-  cleanDateTime,
-  pct,
-  getColorClass,
-  computeBunkMargin,
-  isSubjectDetailComplete,
-  parseClassLogs,
-  combinedAttendance,
-};
+// SubjectDetailSheet consumes these four through this module.
+export { getColorClass, computeBunkMargin, isSubjectDetailComplete, combinedAttendance };
 import type { SectionProps, Semester } from "../types";
 
 export interface AttRow {

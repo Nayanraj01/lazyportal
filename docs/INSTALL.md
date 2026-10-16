@@ -12,6 +12,7 @@ mounts, so the deferred native event survives login, logout, and navigation.
 | Android without an install event | **How to install** explains the browser-menu fallback. |
 | iPhone/iPad Safari in browser mode | Share + Add to Home Screen icons with inline steps ending in the **Add** confirmation. |
 | iOS in another browser | Asks the user to switch to Safari first. |
+| Desktop browsers | No card — use the browser's own install UI. |
 | Standalone (`display-mode: standalone` / `navigator.standalone`) | No card, no reserved space. |
 | Accepted prompt or `appinstalled` | Card disappears immediately. |
 

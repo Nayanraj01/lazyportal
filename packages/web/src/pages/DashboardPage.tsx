@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { auth } from "@juet/core";
 import { getSessionStatus } from "../lib/portal";
 import { titleCase, formatLastSync, shouldThrottleRefresh, recordRefreshAttempt } from "../components/DataViews";
 import { subscribePortalDayRollover } from "../lib/portalSchedule";

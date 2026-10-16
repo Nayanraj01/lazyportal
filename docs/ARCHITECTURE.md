@@ -35,10 +35,12 @@ components/InstallBanner.tsx # floating card + inline browser-specific guidance
 hooks/useSession.ts # restore session on boot, logout
 hooks/useFeature.ts # fetch + error + retry + 401 handling for sections
 hooks/useSemester.ts # persisted semester pick (defaults to first row)
-components/DataViews.tsx # tables, key/value lists, shared error line
-sections/           # one file per dashboard section + index.ts registry
+components/DataViews.tsx # tables, shared error line
+sections/           # one file per dashboard section + index.ts registry;
+                    # sections/attendance.tsx is attendance's shared helper module
 pages/LoginPage.tsx # captcha, login once, save session
-pages/DashboardPage.tsx # header, anchor nav, registry render (skips enabled:false)
+pages/DashboardPage.tsx # header, registry render (skips enabled:false)
+pages/AttendancePage.tsx # full attendance view, opened from the dashboard hero
 ```
 
 Grades/CGPA ship disabled (`enabled: false` in `sections/index.ts`: the new portal

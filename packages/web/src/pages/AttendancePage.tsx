@@ -206,7 +206,6 @@ export function AttendancePage({
           try {
             const data = await features.getSubjectAttendanceAll(client, session, r, base, "current");
             if (pageIsLive.current && data && isCacheGenerationCurrent(generation) && getSessionStatus() !== "expired") {
-              const subId = rowSubId(r);
               setCachedSubjectDetail(session, semId, r, data);
               setDetailsMap((prev) => ({ ...prev, [subId]: data }));
               if (isLive && !isAborted) {

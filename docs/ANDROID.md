@@ -70,10 +70,12 @@ Two things must stay in sync:
 - `drawable*/splash.png` — brand navy with the centred glyph, used by the
   launch theme.
 
-Sources of truth: `packages/web/public/icon.svg` / `icon-maskable.svg`; change
-those, then `npm --workspace @juet/web run generate-icons` + `npm run cap:assets`.
-The glyph is rendered from the PNGs, not SVG text, so output is byte-identical
-everywhere and no fonts are needed.
+Sources of truth: the inline SVG templates in
+`packages/web/scripts/generate-icons.mjs` — the PNGs and `icon-maskable.svg` are
+its *outputs*, so editing the SVGs does nothing. Change templates →
+`npm --workspace @juet/web run generate-icons` → `npm run cap:assets` (reads
+`icon-512.png` / `icon-maskable-512.png` only). `icon.svg` is the favicon/PWA
+icon only.
 
 ## Session storage
 
