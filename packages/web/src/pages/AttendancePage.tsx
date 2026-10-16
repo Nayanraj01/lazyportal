@@ -20,7 +20,6 @@ import {
   type AttData,
   subjectName,
   rowSubId,
-  combinedAttendance,
   getCachedSubjectDetail,
   getCachedSubjectDetailEntry,
   setCachedSubjectDetail,
@@ -28,6 +27,7 @@ import {
   getCachedLov,
   setCachedLov,
 } from "../sections/attendance";
+import { combinedAttendance } from "../lib/attendanceCalc";
 
 export function AttendancePage({
   session,

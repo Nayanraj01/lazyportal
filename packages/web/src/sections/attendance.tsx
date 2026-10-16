@@ -16,15 +16,10 @@ import {
 import {
   type ClassRecord,
   cleanDateTime,
-  getColorClass,
-  computeBunkMargin,
   isSubjectDetailComplete,
   parseClassLogs,
   combinedAttendance,
 } from "../lib/attendanceCalc";
-
-// SubjectDetailSheet consumes these four through this module.
-export { getColorClass, computeBunkMargin, isSubjectDetailComplete, combinedAttendance };
 import type { SectionProps, Semester } from "../types";
 
 export interface AttRow {

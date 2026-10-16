@@ -7,14 +7,16 @@ import type { Session } from "../types";
 import {
   type AttRow,
   subjectName,
-  combinedAttendance,
-  computeBunkMargin,
-  getColorClass,
   getSubjectCacheKey,
   getCachedSubjectDetailEntry,
   CombinedClassLog,
-  isSubjectDetailComplete,
 } from "../sections/attendance";
+import {
+  combinedAttendance,
+  computeBunkMargin,
+  getColorClass,
+  isSubjectDetailComplete,
+} from "../lib/attendanceCalc";
 import {
   computeSubjectRowChecksum,
   doesSubjectNeedDeepFetch,
