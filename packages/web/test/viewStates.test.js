@@ -16,6 +16,7 @@ globalThis.window = { addEventListener() {}, removeEventListener() {} };
 const session = { username: "test-student", instituteid: "test-campus", token: "test-token" };
 const semester = { registrationid: "sem1", registrationcode: "2026ODDSEM" };
 let server, MarksSection, ExamsSection, AttendancePage, SubjectDetailSheet, sessionCacheKey, client, fetchAutosolvedCaptcha;
+let syncAttendanceDetails, runManualAttendanceRefresh, getManualRefreshQuota, getCached, refreshSubjectDetail, computeSubjectRowChecksum;
 
 before(async () => {
   server = await createServer({
@@ -30,6 +31,10 @@ before(async () => {
   ({ sessionCacheKey } = await server.ssrLoadModule("/src/hooks/useFeature.ts"));
   ({ client } = await server.ssrLoadModule("/src/lib/portal.ts"));
   ({ fetchAutosolvedCaptcha } = await server.ssrLoadModule("/src/lib/captchaSolve.ts"));
+  ({ syncAttendanceDetails, runManualAttendanceRefresh } = await server.ssrLoadModule("/src/lib/attendanceSync.ts"));
+  ({ getManualRefreshQuota, computeSubjectRowChecksum } = await server.ssrLoadModule("/src/lib/portalSchedule.ts"));
+  ({ getCached } = await server.ssrLoadModule("/src/hooks/useFeature.ts"));
+  ({ refreshSubjectDetail } = await server.ssrLoadModule("/src/sections/attendance.tsx"));
 });
 after(async () => { await server?.close(); });
 beforeEach(() => values.clear());
@@ -186,4 +191,208 @@ test("captcha fetching can recover after a transient network failure", async (t)
     const result = await fetchAutosolvedCaptcha();
     assert.equal(result.captcha.hidden, "recovered");
   });
+});
+
+const auditRow = (id, percentage = 100) => ({ subjectid: id, subjectcode: `Test(${id})`, Psubjectcomponentid: id, Ppercentage: percentage });
+const auditLogs = (count, present = count) => ({ student_attdsummarylist: Array.from({ length: count }, (_, i) => ({ datetime: `${i + 1}/10/2026 09:00 AM`, present: i < present ? "Y" : "N" })) });
+const overview = (rows) => ({ semesters: [semester], header: null, rows });
+const base = { registrationid: "sem1", registrationcode: semester.registrationcode };
+
+function cacheHistory(row, count, present = count, age = 0) {
+  const key = sessionCacheKey("att.subject", session, "sem1", row.subjectid);
+  values.set(`juet.cache.${key}`, JSON.stringify({
+    data: { P: auditLogs(count, present) }, updatedAt: Date.now() - age,
+    checksum: computeSubjectRowChecksum(row),
+  }));
+  return key;
+}
+
+test("unchanged weekly subjects cause no history requests across seven daily checks", async (t) => {
+  const rows = [auditRow("p1"), auditRow("p2", 80)];
+  cacheHistory(rows[0], 7, 7, 8 * 86400000);
+  cacheHistory(rows[1], 5, 4, 8 * 86400000);
+  const post = t.mock.method(client, "post", async () => { throw new Error("Unexpected history fetch"); });
+  const now = Date.now();
+  const clock = t.mock.method(Date, "now", () => now);
+  for (let day = 0; day < 7; day++) {
+    clock.mock.mockImplementation(() => now + day * 86400000);
+    assert.equal((await syncAttendanceDetails({ session, rows, base })).complete, true);
+  }
+  assert.equal(post.mock.callCount(), 0);
+  assert.equal(getManualRefreshQuota(session).used, 0);
+});
+
+test("background sync fetches only changed, missing, or incomplete subject history", async (t) => {
+  const original = auditRow("unchanged");
+  cacheHistory(original, 7, 7, 8 * 86400000);
+  const changed = auditRow("changed", 100);
+  cacheHistory(changed, 5);
+  const incomplete = auditRow("incomplete");
+  const key = sessionCacheKey("att.subject", session, "sem1", incomplete.subjectid);
+  values.set(`juet.cache.${key}`, JSON.stringify({ data: { P: null }, updatedAt: Date.now(), checksum: computeSubjectRowChecksum(incomplete) }));
+  const rows = [original, { ...changed, Ppercentage: 80 }, auditRow("missing"), incomplete];
+  const calls = [];
+  t.mock.method(client, "post", async (_path, payload) => {
+    calls.push(payload.subjectid);
+    return { response: auditLogs(5, payload.subjectid === "changed" ? 4 : 5) };
+  });
+  assert.equal((await syncAttendanceDetails({ session, rows, base })).complete, true);
+  assert.deepEqual(calls.sort(), ["changed", "incomplete", "missing"]);
+  assert.equal((await syncAttendanceDetails({ session, rows, base })).complete, true);
+  assert.equal(calls.length, 3);
+});
+
+test("an explicit refresh detects 7/7 becoming 8/8 even with a matching cache from today", async (t) => {
+  const row = auditRow("p1");
+  const key = sessionCacheKey("att.subject", session, "sem1", "p1");
+  values.set(`juet.cache.${key}`, JSON.stringify({ data: { P: auditLogs(7) }, updatedAt: Date.now(), checksum: computeSubjectRowChecksum(row) }));
+  const post = t.mock.method(client, "post", async () => ({ response: auditLogs(8) }));
+  const result = await runManualAttendanceRefresh({ session, baselineRows: [row], readOverview: async () => overview([row]) });
+  assert.equal(result.changed, true);
+  assert.equal(result.quota.used, 1);
+  assert.equal(getCached(key).data.P.student_attdsummarylist.length, 8);
+  await syncAttendanceDetails({ session, rows: [row], base });
+  const html = renderToStaticMarkup(createElement(SubjectDetailSheet, { session, row, registrationid: "sem1", onClose() {}, onLogout() {} }));
+  assert.match(html, /8<\/strong> \/ 8/);
+  assert.equal(post.mock.callCount(), 1);
+});
+
+test("a partial failure spends no quota; retry reuses successful siblings and commits once", async (t) => {
+  const rows = [auditRow("p1", 80), auditRow("p2", 80)];
+  const calls = { p1: 0, p2: 0 };
+  let fail = true;
+  t.mock.method(client, "post", async (_path, payload) => {
+    calls[payload.subjectid]++;
+    if (payload.subjectid === "p2" && fail) { const error = new Error("detail failed"); error.status = 500; throw error; }
+    return { response: auditLogs(5, 4) };
+  });
+  const checkpoint = { details: new Map() };
+  const run = () => runManualAttendanceRefresh({ session, checkpoint, baselineRows: rows, readOverview: async () => overview(rows) });
+  await assert.rejects(run(), /detail failed/);
+  assert.equal(getManualRefreshQuota(session).used, 0);
+  assert.equal(getManualRefreshQuota(session).unchanged, 0);
+  assert.equal(getManualRefreshQuota(session).canRefresh, true);
+  assert.equal(values.get("juet.portal.last_sync"), undefined);
+  fail = false;
+  const result = await run();
+  assert.equal(result.quota.used, 1);
+  assert.ok(Number(values.get("juet.portal.last_sync")) > 0);
+  assert.deepEqual(calls, { p1: 1, p2: 2 });
+});
+
+test("manual retry remembers hidden count changes from a successful sibling", async (t) => {
+  const rows = [auditRow("p1"), auditRow("p2")];
+  for (const row of rows) cacheHistory(row, 7);
+  const checkpoint = { details: new Map() };
+  const calls = { p1: 0, p2: 0 };
+  let fail = true;
+  t.mock.method(client, "post", async (_path, payload) => {
+    calls[payload.subjectid]++;
+    if (payload.subjectid === "p2" && fail) throw new Error("Try again");
+    return { response: auditLogs(payload.subjectid === "p1" ? 8 : 7) };
+  });
+  const run = () => runManualAttendanceRefresh({ session, checkpoint, baselineRows: rows, readOverview: async () => overview(rows) });
+  await assert.rejects(run(), /Try again/);
+  assert.equal(getManualRefreshQuota(session).used, 0);
+  fail = false;
+  const result = await run();
+  assert.equal(result.changed, true);
+  assert.equal(result.quota.used, 1);
+  assert.equal(result.quota.unchanged, 0);
+  assert.deepEqual(calls, { p1: 1, p2: 2 });
+  assert.equal(checkpoint.details.size, 0);
+});
+
+test("manual retry rechecks a successful sibling if its overview changed", async (t) => {
+  let rows = [auditRow("p1"), auditRow("p2")];
+  const checkpoint = { details: new Map() };
+  const calls = { p1: 0, p2: 0 };
+  let fail = true;
+  t.mock.method(client, "post", async (_path, payload) => {
+    calls[payload.subjectid]++;
+    if (payload.subjectid === "p2" && fail) throw new Error("Try again");
+    return { response: auditLogs(5, !fail && payload.subjectid === "p1" ? 4 : 5) };
+  });
+  const run = () => runManualAttendanceRefresh({ session, checkpoint, baselineRows: rows, readOverview: async () => overview(rows) });
+  await assert.rejects(run(), /Try again/);
+  rows = [{ ...rows[0], Ppercentage: 80 }, rows[1]];
+  fail = false;
+  assert.equal((await run()).quota.used, 1);
+  assert.deepEqual(calls, { p1: 2, p2: 2 });
+});
+
+test("a new portal day invalidates successful reads from an unfinished manual batch", async (t) => {
+  const rows = [auditRow("p1"), auditRow("p2")];
+  const checkpoint = { details: new Map() };
+  const calls = { p1: 0, p2: 0 };
+  let fail = true;
+  t.mock.method(client, "post", async (_path, payload) => {
+    calls[payload.subjectid]++;
+    if (payload.subjectid === "p2" && fail) throw new Error("Try again");
+    return { response: auditLogs(8) };
+  });
+  const run = () => runManualAttendanceRefresh({ session, checkpoint, baselineRows: rows, readOverview: async () => overview(rows) });
+  await assert.rejects(run(), /Try again/);
+  const tomorrow = Date.now() + 86400000;
+  t.mock.method(Date, "now", () => tomorrow);
+  fail = false;
+  assert.equal((await run()).quota.used, 1);
+  assert.deepEqual(calls, { p1: 2, p2: 2 });
+});
+
+test("a completed unchanged refresh counts only as an unchanged check", async (t) => {
+  const row = auditRow("p1");
+  const key = sessionCacheKey("att.subject", session, "sem1", "p1");
+  values.set(`juet.cache.${key}`, JSON.stringify({ data: { P: auditLogs(8) }, updatedAt: Date.now() - 86400000 }));
+  t.mock.method(client, "post", async () => ({ response: auditLogs(8) }));
+  const result = await runManualAttendanceRefresh({ session, baselineRows: [row], readOverview: async () => overview([row]) });
+  assert.equal(result.changed, false);
+  assert.equal(result.quota.used, 0);
+  assert.equal(result.quota.unchanged, 1);
+});
+
+test("cancelling a refresh retains completed reads but does not deduct quota", async (t) => {
+  let finish, started;
+  const ready = new Promise((resolve) => { started = resolve; });
+  let current = true;
+  t.mock.method(client, "post", async () => { started(); return new Promise((resolve) => { finish = resolve; }); });
+  const row = auditRow("p1");
+  const run = runManualAttendanceRefresh({ session, baselineRows: [row], readOverview: async () => overview([row]), isCurrent: () => current });
+  await ready;
+  current = false;
+  finish({ response: auditLogs(8) });
+  assert.equal(await run, null);
+  assert.equal(getManualRefreshQuota(session).used, 0);
+  assert.ok(getCached(sessionCacheKey("att.subject", session, "sem1", "p1")).data);
+});
+
+test("malformed component responses never spend refresh quota", async (t) => {
+  t.mock.method(client, "post", async () => ({ response: null }));
+  const row = auditRow("p1");
+  await assert.rejects(runManualAttendanceRefresh({ session, baselineRows: [row], readOverview: async () => overview([row]) }), /incomplete class records/);
+  assert.equal(getManualRefreshQuota(session).used, 0);
+});
+
+test("a queued subject loaded by expansion is not fetched again when its worker becomes free", async (t) => {
+  const rows = [auditRow("p1"), auditRow("p2"), auditRow("p3")];
+  const calls = { p1: 0, p2: 0, p3: 0 };
+  const pending = {};
+  let started;
+  const ready = new Promise((resolve) => { started = resolve; });
+  t.mock.method(client, "post", async (_path, payload) => {
+    const id = payload.subjectid;
+    calls[id]++;
+    if (id === "p3") return { response: auditLogs(8) };
+    return new Promise((resolve) => {
+      pending[id] = resolve;
+      if (pending.p1 && pending.p2) started();
+    });
+  });
+  const batch = syncAttendanceDetails({ session, rows, base });
+  await ready;
+  await refreshSubjectDetail(session, rows[2], base);
+  pending.p1({ response: auditLogs(8) });
+  pending.p2({ response: auditLogs(8) });
+  assert.equal((await batch).complete, true);
+  assert.deepEqual(calls, { p1: 1, p2: 1, p3: 1 });
 });
