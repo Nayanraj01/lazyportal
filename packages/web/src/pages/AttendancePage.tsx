@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { features } from "@juet/core";
 import { client, getSessionStatus } from "../lib/portal";
 import { useFeature, getCached, setCached, sessionCacheKey, getCacheGeneration, isCacheGenerationCurrent } from "../hooks/useFeature";
@@ -145,6 +145,32 @@ export function AttendancePage({
     }
     return map;
   });
+
+  const activeSelectedSubject = useMemo(() => {
+    if (!selectedSubject) return null;
+    const subId = String(selectedSubject.subjectid ?? selectedSubject.individualsubjectcode ?? selectedSubject.subjectcode);
+    const found = rows.find((r) => {
+      const id = String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
+      return id === subId;
+    });
+    return (found as (AttRow & Record<string, unknown>) | undefined) ?? selectedSubject;
+  }, [selectedSubject, rows]);
+
+  const handleDetailLoaded = useCallback(
+    (subId: string, data: Record<string, Record<string, unknown>>, loadedUpdatedAt?: number | null) => {
+      const entry = getCachedSubjectDetailEntry(
+        session.username,
+        semId,
+        { subjectid: subId, subjectcode: subId } as AttRow & Record<string, unknown>,
+        session.instituteid
+      );
+      if (entry.updatedAt && loadedUpdatedAt && entry.updatedAt > loadedUpdatedAt) {
+        return;
+      }
+      setDetailsMap((prev) => (prev[subId] === data ? prev : { ...prev, [subId]: data }));
+    },
+    [session.username, semId, session.instituteid]
+  );
 
   useEffect(() => {
     if (isExpired) {
@@ -596,15 +622,22 @@ export function AttendancePage({
       </div>
 
       {/* Slide-over sheet for detailed history */}
-      {selectedSubject && (
+      {activeSelectedSubject && (
         <SubjectDetailSheet
-          row={selectedSubject}
+          row={activeSelectedSubject}
           registrationid={sem?.registrationid}
           registrationcode={sem?.registrationcode}
           session={session}
-          onDetailLoaded={(subId, data) => {
-            setDetailsMap((prev) => (prev[subId] === data ? prev : { ...prev, [subId]: data }));
-          }}
+          cachedDetail={
+            detailsMap[
+              String(
+                activeSelectedSubject.subjectid ??
+                  activeSelectedSubject.individualsubjectcode ??
+                  activeSelectedSubject.subjectcode
+              )
+            ]
+          }
+          onDetailLoaded={handleDetailLoaded}
           onClose={() => setSelectedSubject(null)}
           onLogout={onLogout}
         />

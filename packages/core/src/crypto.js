@@ -32,7 +32,7 @@ export function getIstParts(date = new Date()) {
   const ms = date instanceof Date ? date.getTime() : Number(date);
   const minuteBucket = Number.isFinite(ms) ? Math.floor(ms / 60_000) : -1;
   if (minuteBucket !== -1 && minuteBucket === lastIstMinute && lastIstParts) {
-    return lastIstParts;
+    return { ...lastIstParts };
   }
   const parts = istFormatter.formatToParts(date);
   let day = "";
@@ -53,7 +53,7 @@ export function getIstParts(date = new Date()) {
     lastIstMinute = minuteBucket;
     lastIstParts = res;
   }
-  return res;
+  return { ...res };
 }
 
 /** Date-derived 16-char key in IST. Pure + deterministic for tests. */
@@ -90,6 +90,8 @@ const keyCache = new Map();
 
 export function _resetCryptoCacheForTesting() {
   keyCache.clear();
+  lastIstMinute = -1;
+  lastIstParts = null;
 }
 
 export function _getCryptoCacheSizeForTesting() {

@@ -127,13 +127,13 @@ export function createStore(adapter = memoryAdapter()) {
         return null;
       }
       if (raw === cachedRaw && cachedSession !== null) {
-        return cachedSession;
+        return { ...cachedSession };
       }
       try {
         const parsed = JSON.parse(raw);
         cachedRaw = raw;
         cachedSession = parsed;
-        return parsed;
+        return { ...parsed };
       } catch {
         cachedRaw = null;
         cachedSession = null;

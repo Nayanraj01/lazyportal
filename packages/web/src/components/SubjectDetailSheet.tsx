@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { features } from "@juet/core";
 import { client } from "../lib/portal";
 import { useFeature } from "../hooks/useFeature";
@@ -27,6 +27,7 @@ export function SubjectDetailSheet({
   registrationid,
   registrationcode,
   session,
+  cachedDetail,
   onDetailLoaded,
   onClose,
   onLogout: _onLogout,
@@ -35,7 +36,8 @@ export function SubjectDetailSheet({
   registrationid?: string;
   registrationcode?: string;
   session: Session;
-  onDetailLoaded?: (subId: string, data: Record<string, Record<string, unknown>>) => void;
+  cachedDetail?: Record<string, Record<string, unknown>>;
+  onDetailLoaded?: (subId: string, data: Record<string, Record<string, unknown>>, updatedAt?: number | null) => void;
   onClose: () => void;
   onLogout: () => void;
 }) {
@@ -60,14 +62,18 @@ export function SubjectDetailSheet({
     writeExtra: (d) => (isSubjectDetailComplete(row, d) ? { checksum: computeSubjectRowChecksum(row) } : {}),
   });
 
-  useEffect(() => {
-    if (detail.data && onDetailLoaded) {
-      const subId = String(row.subjectid ?? row.individualsubjectcode ?? row.subjectcode);
-      onDetailLoaded(subId, detail.data);
-    }
-  }, [detail.data, onDetailLoaded, row]);
+  const onDetailLoadedRef = useRef(onDetailLoaded);
+  onDetailLoadedRef.current = onDetailLoaded;
 
-  const attInfo = combinedAttendance(row, detail.data, target / 100);
+  useEffect(() => {
+    if (detail.data && onDetailLoadedRef.current) {
+      const subId = String(row.subjectid ?? row.individualsubjectcode ?? row.subjectcode);
+      onDetailLoadedRef.current(subId, detail.data, detail.updatedAt);
+    }
+  }, [detail.data, detail.updatedAt, row]);
+
+  const activeDetail = cachedDetail ?? detail.data;
+  const attInfo = combinedAttendance(row, activeDetail, target / 100);
 
   // Simulation calculations (supports attending X and leaving Y simultaneously)
   const totalSimPresent = attInfo.totalPresent + attendCount;
@@ -194,13 +200,13 @@ export function SubjectDetailSheet({
 
         {/* Detailed Class History Log */}
         <div className="att-sheet-history-section">
-          {detail.loading && !detail.data && <p className="muted">Loading class breakdown…</p>}
-          {detail.error && !detail.data && (
+          {detail.loading && !activeDetail && <p className="muted">Loading class breakdown…</p>}
+          {detail.error && !activeDetail && (
             <SectionError label="Subject detail" error={detail.error} retry={detail.retry} />
           )}
-          {detail.data && Object.keys(detail.data).length > 0 && (
+          {activeDetail && Object.keys(activeDetail).length > 0 && (
             <div className="att-detail-grid">
-              <CombinedClassLog data={detail.data} />
+              <CombinedClassLog data={activeDetail} />
             </div>
           )}
         </div>

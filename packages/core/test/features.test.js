@@ -515,6 +515,27 @@ describe("features", () => {
     assert.deepEqual(out.T, { summary: [] });
   });
 
+  it("getSubjectAttendanceAll does not skip component if totalpresent > 0 or percentage > 0 even if totalclass is 0", async () => {
+    const calls = [];
+    const fake = {
+      async post(endpoint, payload) {
+        calls.push([endpoint, payload]);
+        return { response: { summary: [{ present: "Y" }] } };
+      },
+    };
+    const row = {
+      subjectid: "s1",
+      subjectcode: "SC1",
+      Lsubjectcomponentid: "c_lec",
+      Ltotalclass: 0,
+      Ltotalpresent: 1, // skewed or corrupted: classes attended > 0
+      Lpercentage: 0,
+    };
+    const out = await getSubjectAttendanceAll(fake, { instituteid: "i1" }, row, { registrationid: "r1", registrationcode: "RC1" });
+    assert.equal(calls.length, 1, "does not skip L because totalpresent > 0");
+    assert.deepEqual(out.L, { summary: [{ present: "Y" }] });
+  });
+
   it("getSubjectAttendanceAll rejects if any component fails with an unexpected error even if another succeeds", async () => {
     const fake = {
       async post(endpoint, payload) {

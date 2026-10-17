@@ -6,6 +6,7 @@ import {
   decrypt,
   makeLocalName,
   importKey,
+  getIstParts,
   _resetCryptoCacheForTesting,
   _getCryptoCacheSizeForTesting,
 } from "../src/crypto.js";
@@ -14,6 +15,14 @@ describe("crypto", () => {
   beforeEach(() => {
     _resetCryptoCacheForTesting();
   });
+  it("getIstParts returns an isolated copy so caller mutations do not corrupt memoized parts", () => {
+    const d = new Date(Date.UTC(2026, 8, 28, 6, 30, 0));
+    const p1 = getIstParts(d);
+    p1.day = "99";
+    const p2 = getIstParts(d);
+    assert.equal(p2.day, "28");
+  });
+
   it("derives known key for 2026-09-28 (IST, Monday)", () => {
     // Verified against live portal Date header + local repro.
     // 2026-09-28 12:00:00 IST = 2026-09-28 06:30:00 UTC

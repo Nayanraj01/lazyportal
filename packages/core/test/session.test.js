@@ -30,6 +30,15 @@ describe("session", () => {
     assert.equal(store.load(), null);
   });
 
+  it("load returns an isolated copy so external mutations do not corrupt cache", () => {
+    const store = createStore(memoryAdapter());
+    store.save({ token: jwt(2_000_000), userid: "u1" });
+    const s1 = store.load();
+    s1.userid = "mutated";
+    const s2 = store.load();
+    assert.equal(s2.userid, "u1");
+  });
+
   it("expiry flag is one-shot", () => {
     const map = new Map();
     const fake = {

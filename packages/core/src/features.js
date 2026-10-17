@@ -235,7 +235,14 @@ function isComponentKnownEmpty(row, t) {
   if (rawTotal === undefined || rawTotal === null || rawTotal === "") return false;
   const total = Number(rawTotal);
   if (!Number.isFinite(total) || total > 0) return false;
-  const rawPct = row[`${t}percentage`];
+
+  const rawPres = row[`${t}totalpresent`] ?? row[`${t}Totalpresent`] ?? row[`${t.toLowerCase()}totalpresent`];
+  if (rawPres !== undefined && rawPres !== null && rawPres !== "") {
+    const pres = Number(rawPres);
+    if (Number.isFinite(pres) && pres > 0) return false;
+  }
+
+  const rawPct = row[`${t}percentage`] ?? row[`${t}Percentage`] ?? row[`${t.toLowerCase()}percentage`];
   if (rawPct !== undefined && rawPct !== null && rawPct !== "") {
     const numPct = Number(String(rawPct).replace("%", "").trim());
     if (Number.isFinite(numPct) && numPct > 0) return false;
