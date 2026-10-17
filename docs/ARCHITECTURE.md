@@ -74,6 +74,19 @@ with a 14-day dismissal cooldown in `localStorage`.
 - Attendance refreshes use row checksums (`doesSubjectNeedDeepFetch`) to skip redundant deep-fetch POSTs when cached details are unchanged.
 - In-memory read-through cache for features and sessions, with 20s cooldowns on manual refresh buttons.
 
+### Deployment and asset caching
+
+- `vercel.json` pins the API function to Mumbai (`bom1`), near the app's Indian users and portal.
+- Only Vite's generated `/assets/` files get a one-year immutable browser cache.
+  Their names contain content hashes, so a new build gets new URLs. Do not put
+  unversioned public files under `packages/web/public/assets/`.
+- HTML, the service worker, and the manifest keep their normal revalidation policy
+  so daily deployments are discoverable immediately.
+- The service worker uses cache-first reads for hashed assets, network-first for
+  navigation, and background revalidation for other static files. Background
+  cache writes use `waitUntil`; storage failures never block an online response.
+- API responses bypass the service worker. No shared student-response cache is used.
+
 ## Native shell (`android/`)
 
 Capacitor wraps the same web bundle; `lib/apiBase.js` is the only place that
