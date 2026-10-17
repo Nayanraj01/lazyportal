@@ -648,16 +648,20 @@ test("clamp safely handles non-finite values (Infinity, NaN) by defaulting to mi
   assert.equal(qInf.used, 0);
 });
 
-test("SubjectDetailSheet isFresh relies on row checksum and skips redundant POST across day rollover when checksum matches", () => {
+test("doesSubjectNeedDeepFetch skips redundant POST across day rollover in background, but revalidates on explicit tap", () => {
   const row = { subjectcode: "CS101", totalclass: 10, totalpresent: 8 };
   const checksum = computeSubjectRowChecksum(row);
   const dummyDetail = { L: { totalclass: 10, totalpresent: 8 } };
   const today = Date.UTC(2026, 9, 7, 8, 30, 0); // 14:00 IST Oct 7
   const yesterday = Date.UTC(2026, 9, 6, 8, 30, 0); // 14:00 IST Oct 6
 
-  // Even across a portal day boundary, if the overview row checksum is identical, deep fetch is skipped
+  // In background sync (default options), identical checksum skips fetch across portal day boundaries
   assert.equal(isCurrentPortalDay(yesterday, today), false);
   assert.equal(doesSubjectNeedDeepFetch(row, dummyDetail, yesterday, checksum, today), false);
+
+  // When explicitly opened by the user, allowIfNotUpdatedToday forces one revalidation per portal day
+  assert.equal(doesSubjectNeedDeepFetch(row, dummyDetail, yesterday, checksum, today, true), true);
+  assert.equal(doesSubjectNeedDeepFetch(row, dummyDetail, today, checksum, today, true), false);
 
   // If the overview row checksum changed (e.g. a new class was recorded), deep fetch is triggered immediately
   const updatedRow = { ...row, totalclass: 11, totalpresent: 9 };

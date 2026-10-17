@@ -5,6 +5,7 @@
   "backgroundColor": "#FCF8FD",
   "server": {
     "url": "https://lazyportal-tan.vercel.app",
-    "cleartext": false
+    "cleartext": false,
+    "errorPath": "offline.html"
   }
 }

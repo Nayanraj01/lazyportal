@@ -195,14 +195,15 @@ export function SubjectDetail({
   session: SectionProps["session"];
 }) {
   const base = { registrationid, registrationcode };
+  const rowChecksum = computeSubjectRowChecksum(row);
   const detail = useFeature<Record<string, Record<string, unknown>>>({
     run: () => features.getSubjectAttendanceAll(client, session, row, base, "current"),
-    deps: [session, registrationid, String(row.subjectid)],
+    deps: [session, registrationid, String(row.subjectid), rowChecksum],
     cacheKey: getSubjectCacheKey(session.username, registrationid, row, session.instituteid),
     staleTimeMs: FEATURE_TTL.subjects,
     isFresh: (updatedAt) => {
       const fresh = getCachedSubjectDetailEntry(session.username, registrationid, row, session.instituteid);
-      return !doesSubjectNeedDeepFetch(row, fresh.data, updatedAt, fresh.checksum);
+      return !doesSubjectNeedDeepFetch(row, fresh.data, updatedAt, fresh.checksum, undefined, true);
     },
     writeExtra: (d) => (isSubjectDetailComplete(row, d) ? { checksum: computeSubjectRowChecksum(row) } : {}),
   });
