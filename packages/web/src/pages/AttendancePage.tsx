@@ -210,6 +210,7 @@ export function AttendancePage({
 
     void syncAttendanceDetails({
       session, rows,
+      overviewUpdatedAt: att.updatedAt,
       base: { registrationid: sem?.registrationid, registrationcode: sem?.registrationcode },
       isCurrent: current,
       onDetail: (id, data) => setDetailsMap((prev) => ({ ...prev, [id]: data })),

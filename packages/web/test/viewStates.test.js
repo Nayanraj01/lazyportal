@@ -12,7 +12,7 @@ globalThis.localStorage = {
   getItem: (key) => values.get(key) ?? null,
   setItem: (key, value) => values.set(key, String(value)),
 };
-globalThis.window = { addEventListener() {}, removeEventListener() {} };
+globalThis.window = { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} };
 const session = { username: "test-student", instituteid: "test-campus", token: "test-token" };
 const semester = { registrationid: "sem1", registrationcode: "2026ODDSEM" };
 let server, MarksSection, ExamsSection, AttendancePage, SubjectDetailSheet, sessionCacheKey, client, fetchAutosolvedCaptcha;
@@ -206,6 +206,49 @@ function cacheHistory(row, count, present = count, age = 0) {
   }));
   return key;
 }
+
+test("cache-only attendance visits preserve sync time and emit no sync event", async (t) => {
+  const row = auditRow("p1");
+  cacheHistory(row, 7, 7, 86400000);
+  const post = t.mock.method(client, "post", async () => { throw new Error("Unexpected history fetch"); });
+  const events = t.mock.method(window, "dispatchEvent");
+  for (const previous of [null, "1000", "3000"]) {
+    values.delete("juet.portal.last_sync");
+    if (previous !== null) values.set("juet.portal.last_sync", previous);
+    const overviewUpdatedAt = previous === null ? undefined : 1000;
+    assert.equal((await syncAttendanceDetails({ session, rows: [row], base, overviewUpdatedAt })).complete, true);
+    assert.equal(values.get("juet.portal.last_sync") ?? null, previous);
+  }
+  assert.equal(post.mock.callCount(), 0);
+  assert.equal(events.mock.callCount(), 0);
+});
+
+test("a real overview read advances sync time without refetching unchanged history", async (t) => {
+  const row = auditRow("p1");
+  cacheHistory(row, 7);
+  values.set("juet.portal.last_sync", "1000");
+  const post = t.mock.method(client, "post", async () => { throw new Error("Unexpected history fetch"); });
+  const events = t.mock.method(window, "dispatchEvent");
+  const overviewUpdatedAt = Date.now() - 1000;
+  await syncAttendanceDetails({ session, rows: [row], base, overviewUpdatedAt });
+  assert.equal(values.get("juet.portal.last_sync"), String(overviewUpdatedAt));
+  assert.equal(events.mock.callCount(), 1);
+  assert.equal(events.mock.calls[0].arguments[0].type, "juet:sync");
+  assert.equal(post.mock.callCount(), 0);
+  // Returning to this cached overview later must not advance the timestamp.
+  await syncAttendanceDetails({ session, rows: [row], base, overviewUpdatedAt });
+  assert.equal(values.get("juet.portal.last_sync"), String(overviewUpdatedAt));
+  assert.equal(events.mock.callCount(), 1);
+});
+
+test("a completed history read records its actual completion time", async (t) => {
+  const row = auditRow("p1");
+  const completedAt = Date.now();
+  t.mock.method(Date, "now", () => completedAt);
+  t.mock.method(client, "post", async () => ({ response: auditLogs(8) }));
+  await syncAttendanceDetails({ session, rows: [row], base, overviewUpdatedAt: completedAt - 1000 });
+  assert.equal(values.get("juet.portal.last_sync"), String(completedAt));
+});
 
 test("unchanged weekly subjects cause no history requests across seven daily checks", async (t) => {
   const rows = [auditRow("p1"), auditRow("p2", 80)];

@@ -30,7 +30,7 @@ export function attendanceRowsChanged(before: AttRow[], after: AttRow[]) {
 
 /** Automatic reads follow overview changes; manual batches explicitly recheck history. */
 export async function syncAttendanceDetails({
-  session, rows, base, isCurrent = () => true, onDetail, onProgress, checkedDetails,
+  session, rows, base, isCurrent = () => true, onDetail, onProgress, checkedDetails, overviewUpdatedAt,
 }: {
   session: Session;
   rows: AttRow[];
@@ -40,6 +40,8 @@ export async function syncAttendanceDetails({
   onProgress?: (pending: Set<string>, done: number, total: number) => void;
   /** Present only for a manual batch: skip successful reads from its failed attempt. */
   checkedDetails?: Map<string, Detail>;
+  /** Time of the real overview read, so cache-only visits cannot claim a new sync. */
+  overviewUpdatedAt?: number | null;
 }) {
   const queue = rows.map((row) => ({
     row,
@@ -55,6 +57,7 @@ export async function syncAttendanceDetails({
   let done = 0;
   let changed = false;
   let cancelled = false;
+  let syncedAt = overviewUpdatedAt ?? 0;
   const errors: unknown[] = [];
   const progress = () => { if (isCurrent()) onProgress?.(new Set(pending), done, total); };
   progress();
@@ -69,8 +72,9 @@ export async function syncAttendanceDetails({
         const latest = getCachedSubjectDetailEntry(session.username, base.registrationid, row, session.instituteid);
         const needsRead = doesSubjectNeedDeepFetch(row, latest.data, latest.updatedAt, latest.checksum) ||
           (checkedDetails && checkedDetails.get(key) !== latest.data && latest.data === entry.data);
-        const result = needsRead ? await refreshSubjectDetail(session, row, base) : { data: latest.data! };
+        const result = needsRead ? await refreshSubjectDetail(session, row, base) : { data: latest.data!, updatedAt: latest.updatedAt };
         if (!isCurrent()) { cancelled = true; break; }
+        syncedAt = Math.max(syncedAt, result.updatedAt ?? 0);
         changed ||= detailSignature(entry.data) !== detailSignature(result.data);
         checkedDetails?.set(key, result.data);
         onDetail?.(id, result.data);
@@ -86,10 +90,13 @@ export async function syncAttendanceDetails({
     }
   }));
   const complete = isCurrent() && !cancelled && errors.length === 0 && done === total;
-  if (complete) {
+  if (complete && syncedAt > 0) {
     try {
-      localStorage.setItem("juet.portal.last_sync", String(Date.now()));
-      window.dispatchEvent(new CustomEvent("juet:sync"));
+      const previous = Number(localStorage.getItem("juet.portal.last_sync"));
+      if (!Number.isFinite(previous) || syncedAt > previous) {
+        localStorage.setItem("juet.portal.last_sync", String(syncedAt));
+        window.dispatchEvent(new CustomEvent("juet:sync"));
+      }
     } catch {}
   }
   return { changed, errors, complete };
@@ -98,7 +105,7 @@ export async function syncAttendanceDetails({
 /** A failed/cancelled batch keeps successful cache writes, but spends no quota. */
 export async function runManualAttendanceRefresh({
   readOverview, baselineRows, checkpoint = { details: new Map() }, ...sync
-}: Omit<Parameters<typeof syncAttendanceDetails>[0], "rows" | "base" | "checkedDetails"> & {
+}: Omit<Parameters<typeof syncAttendanceDetails>[0], "rows" | "base" | "checkedDetails" | "overviewUpdatedAt"> & {
   readOverview: () => Promise<AttData>;
   baselineRows: AttRow[];
   checkpoint?: ManualAttendanceRefreshCheckpoint;
@@ -111,6 +118,7 @@ export async function runManualAttendanceRefresh({
     checkpoint.portalDay = portalDay;
   }
   const fresh = await readOverview();
+  const overviewUpdatedAt = Date.now();
   if (!current()) return null;
   const semester = fresh?.semesters?.[0];
   if (!fresh?.rows?.length || !semester?.registrationid) throw new Error("Portal returned no attendance records");
@@ -119,6 +127,7 @@ export async function runManualAttendanceRefresh({
     ...sync, rows: fresh.rows,
     base: { registrationid: semester.registrationid, registrationcode: semester.registrationcode },
     checkedDetails: checkpoint.details,
+    overviewUpdatedAt,
   });
   checkpoint.changed ||= result.changed;
   if (!current()) return null;
