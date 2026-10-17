@@ -164,7 +164,7 @@ export function AttendancePage({
         { subjectid: subId, subjectcode: subId } as AttRow & Record<string, unknown>,
         session.instituteid
       );
-      if (entry.updatedAt && loadedUpdatedAt && entry.updatedAt > loadedUpdatedAt) {
+      if (entry.updatedAt && loadedUpdatedAt && entry.updatedAt > loadedUpdatedAt && entry.data !== data) {
         return;
       }
       setDetailsMap((prev) => (prev[subId] === data ? prev : { ...prev, [subId]: data }));

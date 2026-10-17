@@ -21,6 +21,9 @@ describe("crypto", () => {
     p1.day = "99";
     const p2 = getIstParts(d);
     assert.equal(p2.day, "28");
+    p2.day = "88";
+    const p3 = getIstParts(d);
+    assert.equal(p3.day, "28");
   });
 
   it("derives known key for 2026-09-28 (IST, Monday)", () => {

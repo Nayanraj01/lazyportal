@@ -530,10 +530,15 @@ describe("features", () => {
       Ltotalclass: 0,
       Ltotalpresent: 1, // skewed or corrupted: classes attended > 0
       Lpercentage: 0,
+      Tsubjectcomponentid: "c_tut",
+      Ttotalclass: 0,
+      Ttotalpresent: 0,
+      Tpercentage: "25.0%", // skewed: percentage > 0
     };
     const out = await getSubjectAttendanceAll(fake, { instituteid: "i1" }, row, { registrationid: "r1", registrationcode: "RC1" });
-    assert.equal(calls.length, 1, "does not skip L because totalpresent > 0");
+    assert.equal(calls.length, 2, "does not skip L (present > 0) or T (percentage > 0)");
     assert.deepEqual(out.L, { summary: [{ present: "Y" }] });
+    assert.deepEqual(out.T, { summary: [{ present: "Y" }] });
   });
 
   it("getSubjectAttendanceAll rejects if any component fails with an unexpected error even if another succeeds", async () => {

@@ -32,9 +32,12 @@ describe("session", () => {
 
   it("load returns an isolated copy so external mutations do not corrupt cache", () => {
     const store = createStore(memoryAdapter());
-    store.save({ token: jwt(2_000_000), userid: "u1" });
+    const original = { token: jwt(2_000_000), userid: "u1" };
+    store.save(original);
+    original.userid = "mutated-after-save";
     const s1 = store.load();
-    s1.userid = "mutated";
+    assert.equal(s1.userid, "u1");
+    s1.userid = "mutated-after-load";
     const s2 = store.load();
     assert.equal(s2.userid, "u1");
   });

@@ -146,7 +146,7 @@ export function createStore(adapter = memoryAdapter()) {
     save(session) {
       const raw = JSON.stringify(session);
       cachedRaw = raw;
-      cachedSession = session;
+      cachedSession = JSON.parse(raw);
       adapter.set(SESSION_KEY, raw);
     },
     clear() {

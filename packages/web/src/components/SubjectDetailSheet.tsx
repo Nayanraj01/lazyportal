@@ -50,9 +50,11 @@ export function SubjectDetailSheet({
   const base = { registrationid, registrationcode };
   const cacheKey = getSubjectCacheKey(session.username, registrationid, row, session.instituteid);
 
+  const rowChecksum = computeSubjectRowChecksum(row);
+
   const detail = useFeature<Record<string, Record<string, unknown>>>({
     run: () => features.getSubjectAttendanceAll(client, session, row, base, "current"),
-    deps: [session, registrationid, String(row.subjectid)],
+    deps: [session, registrationid, String(row.subjectid), rowChecksum],
     cacheKey,
     staleTimeMs: FEATURE_TTL.subjects,
     isFresh: (updatedAt) => {
@@ -72,7 +74,7 @@ export function SubjectDetailSheet({
     }
   }, [detail.data, detail.updatedAt, row]);
 
-  const activeDetail = cachedDetail ?? detail.data;
+  const activeDetail = detail.data ?? cachedDetail;
   const attInfo = combinedAttendance(row, activeDetail, target / 100);
 
   // Simulation calculations (supports attending X and leaving Y simultaneously)
