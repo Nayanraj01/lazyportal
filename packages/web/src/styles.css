@@ -598,8 +598,41 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 .muted { margin: 0; font-size: 14px; color: var(--muted); }
-.error { font-size: 14px; color: var(--danger); }
-.error button { margin-left: 8px; min-height: 40px; padding: 6px 14px; font-size: 14px; }
+.error,
+.section-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  border-radius: var(--r-md);
+  background: var(--surfaceContainerLow);
+  border: 1px solid var(--outlineVariant);
+  font-size: var(--fs-s);
+  color: var(--onSurface);
+}
+.error button,
+.section-error button {
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--outlineVariant);
+  background: var(--surfaceContainerHigh);
+  color: var(--onSurface);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.error button:active,
+.section-error button:active {
+  transform: scale(0.96);
+}
+.error button:disabled,
+.section-error button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 
 /* ==== Connected button group ==== */
 

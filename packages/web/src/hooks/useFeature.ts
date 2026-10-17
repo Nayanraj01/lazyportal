@@ -221,9 +221,8 @@ export function useFeature<T>({
 
   const retry = useCallback(() => {
     forceRef.current = true;
-    setStateForKey(cacheKey, { error: null });
     setRetryKey((k) => k + 1);
-  }, [cacheKey, setStateForKey]);
+  }, []);
 
   // Re-fetch live data when a scoped or global refresh is requested
   useEffect(() => {
@@ -267,11 +266,10 @@ export function useFeature<T>({
       });
       return () => void (live = false);
     }
-    if (cached.data === null) {
+    if (cached.data === null && !visibleState.error) {
       // Keep this key's loading state visible while its request is in flight.
       setStateForKey(cacheKey, { loading: true });
     }
-    setStateForKey(cacheKey, { error: null });
 
     let promise = cacheKey ? inFlight.get(cacheKey) : undefined;
     if (!promise) {
@@ -299,7 +297,7 @@ export function useFeature<T>({
     promise.then(
       ({ data: d, updatedAt: time }) => {
         if (!live) return;
-        setStateForKey(cacheKey, { data: d as T, updatedAt: time, loading: false });
+        setStateForKey(cacheKey, { data: d as T, updatedAt: time, loading: false, error: null });
       },
       (e) => {
         if (!live) return;

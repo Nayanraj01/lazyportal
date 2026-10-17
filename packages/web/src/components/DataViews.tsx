@@ -75,12 +75,33 @@ export function AutoTable({ rows }: { rows: Record<string, unknown>[] }) {
 
 /** Error line with retry, shared by every section. */
 export function SectionError({ label, error, retry }: { label: string; error: string; retry: () => void }) {
-  const isDown = /down \(not us\)|network error|failed to fetch|unable to reach|\b50[0-9]\b|\b429\b|you are offline/i.test(error);
+  const [retrying, setRetrying] = useState(false);
+  const isOffline = (typeof navigator !== "undefined" && !navigator.onLine) || /you are offline|offline/i.test(error);
+  const isDown = !isOffline && /down \(not us\)|network error|failed to fetch|unable to reach|\b50[0-9]\b|\b429\b/i.test(error);
+
+  useEffect(() => {
+    if (!isOffline || typeof window === "undefined") return;
+    const onOnline = () => retry();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [isOffline, retry]);
+
+  const handleRetry = () => {
+    if (retrying) return;
+    setRetrying(true);
+    retry();
+    setTimeout(() => setRetrying(false), 600);
+  };
+
   return (
-    <p role="alert" className="error">
-      {isDown ? "JUET's portal is down (not us)." : `${label} failed: ${error}`}{" "}
-      <button onClick={retry}>Retry</button>
-    </p>
+    <div role="alert" className="section-error">
+      <span>
+        {isOffline ? "You are offline." : isDown ? "JUET's portal is down (not us)." : `${label} failed: ${error}`}
+      </span>
+      <button type="button" onClick={handleRetry} disabled={retrying}>
+        {retrying ? "Retrying…" : "Retry"}
+      </button>
+    </div>
   );
 }
 
