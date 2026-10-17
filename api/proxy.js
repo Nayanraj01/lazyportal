@@ -71,6 +71,15 @@ export const config = {
 };
 export const maxDuration = 60;
 
+/** 413 contract shared by the content-length guard and the streaming body guard. */
+function sendPayloadTooLarge(res, detail) {
+  res.status(413).json({
+    status: { responseStatus: "Failure" },
+    message: "Payload Too Large",
+    detail,
+  });
+}
+
 /** Build a target beneath the fixed API prefix, rejecting URL delimiters and
  * dot segments before WHATWG URL normalization can remove the prefix. */
 export function buildUpstreamTarget(pathValue, query = {}) {
@@ -254,11 +263,7 @@ export default async function handler(req, res) {
       if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
         req.on?.("error", () => {});
         req.resume?.();
-        res.status(413).json({
-          status: { responseStatus: "Failure" },
-          message: "Payload Too Large",
-          detail: `Request body exceeds ${MAX_BODY_BYTES} bytes`,
-        });
+        sendPayloadTooLarge(res, `Request body exceeds ${MAX_BODY_BYTES} bytes`);
         return;
       }
 
@@ -271,11 +276,7 @@ export default async function handler(req, res) {
       } catch (err) {
         if (err instanceof PayloadTooLargeError) {
           req.on?.("error", () => {});
-          res.status(413).json({
-            status: { responseStatus: "Failure" },
-            message: "Payload Too Large",
-            detail: err.message,
-          });
+          sendPayloadTooLarge(res, err.message);
           return;
         }
         if (

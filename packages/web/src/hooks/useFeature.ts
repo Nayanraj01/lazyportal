@@ -233,21 +233,14 @@ export function useFeature<T>({
       setRetryKey((k) => k + 1);
     };
 
-    window.addEventListener("juet:refresh-all", handleRefresh);
-    if (targetScope === "attendance" || targetScope === "all") {
-      window.addEventListener("juet:refresh-attendance", handleRefresh);
-    }
-    if (targetScope === "dashboard" || targetScope === "all") {
-      window.addEventListener("juet:refresh-dashboard", handleRefresh);
-    }
+    const events = [
+      "juet:refresh-all",
+      ...(targetScope === "attendance" || targetScope === "all" ? ["juet:refresh-attendance"] : []),
+      ...(targetScope === "dashboard" || targetScope === "all" ? ["juet:refresh-dashboard"] : []),
+    ];
+    for (const name of events) window.addEventListener(name, handleRefresh);
     return () => {
-      window.removeEventListener("juet:refresh-all", handleRefresh);
-      if (targetScope === "attendance" || targetScope === "all") {
-        window.removeEventListener("juet:refresh-attendance", handleRefresh);
-      }
-      if (targetScope === "dashboard" || targetScope === "all") {
-        window.removeEventListener("juet:refresh-dashboard", handleRefresh);
-      }
+      for (const name of events) window.removeEventListener(name, handleRefresh);
     };
   }, [cacheKey, setStateForKey, targetScope]);
 

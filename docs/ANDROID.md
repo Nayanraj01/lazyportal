@@ -1,8 +1,7 @@
 # Android app (Capacitor)
 
-The web app ships to Android inside Capacitor's WebView. The shell bundles the
-same `packages/web/dist` build, so the dashboard is identical to the browser
-one; only where API traffic goes differs (see [API routing](#api-routing)).
+The Android app is the same web bundle inside Capacitor's WebView; only where API
+traffic goes differs (see [API routing](#api-routing)).
 
 | Piece | Location |
 |---|---|
@@ -12,9 +11,6 @@ one; only where API traffic goes differs (see [API routing](#api-routing)).
 | Launcher icons + splash (generated, checked in) | `android/app/src/main/res/mipmap-*/`, `drawable*/splash.png` |
 | Icon/splash generator | `scripts/generate-app-assets.mjs` |
 | CI (tests, debug APK, tagged releases) | `.github/workflows/build-apk.yml` |
-
-App id `com.lazyportal.juet`, name `JUET Portal` — both from
-`capacitor.config.json`; `npx cap sync` writes them into the native project.
 
 ## Prerequisites
 
@@ -39,18 +35,15 @@ npm run cap:open     # open android/ in Android Studio
 npm test             # core + web + proxy tests (no Android toolchain needed)
 ```
 
-`android/` is checked in (Capacitor's template plus this repo's icons and
-colours). Edit native files in place — `cap sync` overwrites only the generated
-files (bundle, `capacitor.config.json`, `capacitor.settings.gradle`,
-`capacitor-cordova-android-plugins/`).
+`android/` is checked in — edit native files in place. `cap sync` overwrites only
+the generated files: the bundle, `capacitor.config.json`,
+`capacitor.settings.gradle`, `capacitor-cordova-android-plugins/`.
 
 ## API routing
 
-The portal 403s any `Origin`/`Referer` that is not its own, so browsers must go
-through a proxy on the same origin as the page. The native shell loads the
-production deployment (`https://lazyportal-tan.vercel.app`) via `server.url` in
-`capacitor.config.json`. This provides instant daily updates without requiring
-users to reinstall the APK.
+The portal 403s any `Origin`/`Referer` that is not its own, so the shell loads
+the production deployment (`https://lazyportal-tan.vercel.app`) via `server.url`
+in `capacitor.config.json` — instant daily updates, no APK reinstall.
 
 | Build | `BASE_URL` | Resolved by |
 |---|---|---|
@@ -58,18 +51,16 @@ users to reinstall the APK.
 | Capacitor app | `https://lazyportal-tan.vercel.app/api` | `packages/web/src/lib/apiBase.js` |
 | Fork / preview | `VITE_API_BASE` (web), `VITE_NATIVE_API_BASE` (app) | same file |
 
-`shared/cors.js` allows `WEBVIEW_ORIGIN` (`https://lazyportal-tan.vercel.app`). Two
-things must stay in sync:
+Two things must stay in sync:
 
-1. `WEBVIEW_ORIGIN` in `shared/cors.js` ↔ `server.url`
-   in `capacitor.config.json` (a test asserts this).
-2. `PROD_API_BASE` in `packages/web/src/lib/apiBase.js` ↔ the deployed proxy
-   URL. Changing the deployment URL means updating this constant and
-   redeploying.
+1. `WEBVIEW_ORIGIN` in `shared/cors.js` ↔ `server.url` in `capacitor.config.json`
+   (a test asserts this).
+2. `PROD_API_BASE` in `packages/web/src/lib/apiBase.js` ↔ the deployed proxy URL.
+   Changing the deployment URL means updating this constant and redeploying.
 
 ## Icons and splash
 
-`npm run cap:assets` writes straight into `android/app/src/main/res/`:
+`npm run cap:assets` writes into `android/app/src/main/res/`:
 
 - `mipmap-*/ic_launcher.png` — legacy launcher icon (the PWA icon).
 - `mipmap-*/ic_launcher_round.png` — circular variant.
@@ -79,12 +70,12 @@ things must stay in sync:
 - `drawable*/splash.png` — brand navy with the centred glyph, used by the
   launch theme.
 
-The glyph is un-mixed from `public/icon-maskable-512.png` (white on `#1a237e`)
-rather than re-rendered from SVG text, so it needs no fonts and produces
-byte-identical output everywhere — unlike `@capacitor/assets`, whose old sharp
-downloads libvips from GitHub during install. Sources of truth remain
-`packages/web/public/icon.svg` / `icon-maskable.svg`; change those, then run
-`npm --workspace @juet/web run generate-icons` followed by `npm run cap:assets`.
+Sources of truth: the inline SVG templates in
+`packages/web/scripts/generate-icons.mjs` — the PNGs and `icon-maskable.svg` are
+its *outputs*, so editing the SVGs does nothing. Change templates →
+`npm --workspace @juet/web run generate-icons` → `npm run cap:assets` (reads
+`icon-512.png` / `icon-maskable-512.png` only). `icon.svg` is the favicon/PWA
+icon only.
 
 ## Session storage
 
@@ -101,20 +92,14 @@ cd android
 ./gradlew assembleRelease          # or: ./gradlew bundleRelease for an AAB
 ```
 
-`app/build.gradle` keeps `versionCode` above previously shipped APKs by taking
-the maximum of the full Git commit count and the new workflow run number plus
-the legacy `android.yml` high-water mark (13). CI fetches full history and passes
-the run number through `VERSION_CODE_RUN`, so this workflow rename cannot cause
-Android to reject an update. On a `v*` tag, CI also sets `versionName`
-from the tag (without the leading `v`). The APK workflow always uploads
-`app-debug.apk` as a run artifact. For version tags it additionally builds a
-signed `app-release.apk` and creates or updates a published GitHub Release with
-that APK attached.
-
-Release-tag builds require a persistent signing key; CI deliberately fails
-rather than publishing an APK signed by a temporary key that cannot receive
-future updates. To create a keystore, choose strong, unique passwords and keep
-them private:
+`app/build.gradle` keeps `versionCode` above previously shipped APKs via
+`max(full Git commit count, run number + legacy android.yml high-water mark 13)`;
+CI fetches full history and passes the run number through `VERSION_CODE_RUN`. On
+a `v*` tag, CI sets `versionName` from the tag, uploads `app-debug.apk` as a run
+artifact, builds a signed `app-release.apk`, and creates or updates a GitHub
+Release with the APK attached. Release-tag builds require a persistent keystore —
+CI fails rather than publishing with a temporary key that can't sign a future
+update.
 
 ```sh
 keytool -genkeypair -v \
@@ -125,18 +110,15 @@ keytool -genkeypair -v \
   -dname "CN=JUET Portal, O=Lazyportal, C=IN"
 ```
 
-Add these repository Actions secrets before pushing a version tag:
+Repository Actions secrets, added before pushing a version tag:
 
 - `KEYSTORE_BASE64` — output of `base64 < android/app/release.keystore | tr -d '\n'`
 - `KEYSTORE_PASSWORD` — the keystore password
-- `KEY_ALIAS` — the key alias (for the command above, `lazyportal`)
+- `KEY_ALIAS` — the key alias (`lazyportal`)
 - `KEY_PASSWORD` — the key password
 
-The keystore is ignored by Git; never commit it or share the encoded value. The
-workflow uses Java 21 because the Capacitor Android project compiles with Java 21.
-Never distribute debug builds to users; release builds prevent Play Protect
-debug blocks and permit seamless updates without "App not installed" errors.
-
+The keystore is git-ignored; never commit it or share the encoded value. Never
+distribute debug builds.
 
 ## Before merging a native change (device QA)
 
@@ -150,14 +132,11 @@ physical device or emulator, against the deployed proxy:
 ## If the proxy deployment moves
 
 Installed apps keep calling the baked-in `PROD_API_BASE`
-(`packages/web/src/lib/apiBase.js`) — there is no update channel. Recovery is
-a new app build: update the constant, `npm run cap:sync`, `npm run
-android:apk`, redistribute. Forks should set `VITE_NATIVE_API_BASE` to their
-own proxy at build time instead.
+(`packages/web/src/lib/apiBase.js`) — there is no update channel. Recovery is a
+new app build: update the constant, `npm run cap:sync`, `npm run android:apk`,
+redistribute. Forks should set `VITE_NATIVE_API_BASE` to their own proxy.
 
 ## Live reload (dev only)
-
-Point the shell at the Vite dev server:
 
 ```sh
 # terminal 1 — the shell must reach the LAN IP, not localhost
@@ -169,15 +148,14 @@ VITE_NATIVE_API_BASE=/api npm run cap:sync
 ```
 
 `VITE_NATIVE_API_BASE=/api` makes the WebView call its own origin, which the
-Vite dev server proxies — so the preflighted absolute-URL path is bypassed while
-you iterate.
+Vite dev server proxies.
 
 ## Troubleshooting
 
 | Symptom | Cause |
 |---|---|
-| Blank white screen after launch | Device is completely offline on initial boot before cache warmup, or deployment URL is unreachable. |
+| Blank white screen after launch | Device offline before cache warmup, or deployment URL unreachable. |
 | Every request fails with a CORS error | WebView origin drifted from `WEBVIEW_ORIGIN` (`shared/cors.js`) or the proxy has no CORS headers deployed yet. |
 | Requests fail with `NETWORK_ERROR` | Device offline, or the production proxy URL in `apiBase.js` is wrong/undeployed. |
-| `./gradlew` cannot find a JDK / SDK | Set `JAVA_HOME` (JDK 21) and `ANDROID_HOME`; alternatively open `android/` in Android Studio. |
-| Splash shows the Capacitor logo colours | `npm run cap:assets` was not run after checkout — icons and splash are checked in, so this only happens if they were overwritten. |
+| `./gradlew` cannot find a JDK / SDK | Set `JAVA_HOME` (JDK 21) and `ANDROID_HOME`; or open `android/` in Android Studio. |
+| Splash shows the Capacitor logo colours | `npm run cap:assets` was not run after checkout — icons/splash are checked in, so this only happens if they were overwritten. |

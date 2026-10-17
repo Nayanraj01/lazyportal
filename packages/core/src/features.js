@@ -127,33 +127,6 @@ export async function getGradesLatest(client, session) {
   return { info, semesters, registrationcode: sem.registrationcode, rows };
 }
 
-/** Personal info. Plain JSON (official app skips AES here). Read-only; no edits/uploads. */
-export async function getPersonalInfo(client, session) {
-  const body = await client.postRaw("/studentpersinfo/getstudent-personalinformation", {
-    instituteid: session.instituteid,
-  });
-  return {
-    general: body.response?.generalinformation ?? null,
-    qualification: body.response?.qualification ?? null,
-  };
-}
-
-/** Pending service requests. Plain JSON. Read-only list. */
-export async function getPendingServiceRequests(client, session) {
-  const body = await client.postRaw("/servicerequestbystudent/getpendingservicerequestgrid", {
-    instituteid: session.instituteid,
-  });
-  return body.response?.pendingList ?? [];
-}
-
-/** Medical info. Plain JSON (official app sends {} unencrypted). Read-only. */
-export async function getMedicalInfo(client, session) {
-  const body = await client.postRaw("/studentinformation/getstudentmedicalinfo", {
-    instituteid: session.instituteid,
-  });
-  return body.response ?? null;
-}
-
 /** Semesters for the faculty lookup. Encrypted {instituteid}. */
 export async function getFacultyRegistrations(client, session) {
   const body = await client.post("/reqsubfaculty/getregistrationList", {
@@ -254,6 +227,13 @@ function isComponentKnownEmpty(row, t) {
 export async function getSubjectAttendanceAll(client, session, row, { registrationid, registrationcode }, which = "current") {
   const out = {};
   let lastErr = null;
+  const read = (csv) => ({
+    subjectid: row.subjectid,
+    registrationid,
+    components: csv,
+    subjectcode: row.individualsubjectcode ?? row.subjectcode,
+    registrationcode,
+  });
   await Promise.all(
     ["L", "T", "P"].map(async (t) => {
       const csv = row[`${t}subjectcomponentid`];
@@ -263,13 +243,7 @@ export async function getSubjectAttendanceAll(client, session, row, { registrati
         return;
       }
       try {
-        out[t] = await fetchSubjectAttendance(client, session, which, {
-          subjectid: row.subjectid,
-          registrationid,
-          components: csv,
-          subjectcode: row.individualsubjectcode ?? row.subjectcode,
-          registrationcode,
-        });
+        out[t] = await fetchSubjectAttendance(client, session, which, read(csv));
       } catch (e) {
         if (isNoAttendance(e)) {
           out[t] = { summary: [] };
@@ -278,20 +252,15 @@ export async function getSubjectAttendanceAll(client, session, row, { registrati
         // Transient network/proxy 502/504 retry: one retry on mobile transport blips
         if (e?.code === "NETWORK_ERROR" || e?.status === 502 || e?.status === 504) {
           try {
-            out[t] = await fetchSubjectAttendance(client, session, which, {
-              subjectid: row.subjectid,
-              registrationid,
-              components: csv,
-              subjectcode: row.individualsubjectcode ?? row.subjectcode,
-              registrationcode,
-            });
+            out[t] = await fetchSubjectAttendance(client, session, which, read(csv));
             return;
           } catch (retryErr) {
             if (isNoAttendance(retryErr)) {
               out[t] = { summary: [] };
               return;
             }
-            e = retryErr;
+            lastErr = retryErr;
+            return;
           }
         }
         lastErr = e;
@@ -427,71 +396,5 @@ export async function getSgpaLatest(client, session) {
     stynumber: currentsem,
   });
   return { student, currentsem, semesters };
-}
-
-/** Fee summary rows (raw JSON endpoint, unencrypted). Returns array, [] on odd shapes. Read-only. */
-export async function getFeeSummary(client, session) {
-  const body = await client.postRaw("/studentfeeledger/loadfeesummary", {
-    instituteid: session.instituteid,
-  });
-  const rows = body.response?.feesummarydata ?? body.response ?? [];
-  return Array.isArray(rows) ? rows : [];
-}
-
-/** Payslip dues by enrollment. Encrypted. Read-only. */
-export async function getPayslipDues(client, session) {
-  const body = await client.post("/feepayslipcontroller/getdueamountdetails", {
-    enrollmentno: session.enrollmentno,
-  });
-  return body.response?.studentlist ?? [];
-}
-
-/** Active fee events (what is due now, read-only). Encrypted {instituteid, maineventid:""}. */
-export async function getFeeEvents(client, session) {
-  const body = await client.post("/onlinefeepayment/getmyactivefeeevents", {
-    instituteid: session.instituteid,
-    maineventid: "",
-  });
-  return body.response?.formdatetodate ?? [];
-}
-
-/** Approved service requests. Plain JSON {instituteid}. Read-only list. */
-export async function getApprovedRequests(client, session) {
-  const body = await client.postRaw("/servicerequestbystudent/getapprovedrequestgrid", {
-    instituteid: session.instituteid,
-  });
-  return body.response?.approvedList ?? [];
-}
-
-/** Closed service requests. Plain JSON {instituteid}. Read-only list. */
-export async function getClosedRequests(client, session) {
-  const body = await client.postRaw("/servicerequestbystudent/getclosedservicerequests", {
-    instituteid: session.instituteid,
-  });
-  return body.response?.closedRequestList ?? [];
-}
-
-/** Fee-paid service requests. Plain JSON {instituteid}. Read-only list. */
-export async function getPaidRequests(client, session) {
-  const body = await client.postRaw("/servicerequestbystudent/getfeepaidservicerequests", {
-    instituteid: session.instituteid,
-  });
-  return body.response?.feePaidList ?? [];
-}
-
-/** Withdrawn service requests. Plain JSON {instituteid}. Read-only list. */
-export async function getWithdrawnRequests(client, session) {
-  const body = await client.postRaw("/servicerequestbystudent/getwithdwalservicerequests", {
-    instituteid: session.instituteid,
-  });
-  return body.response?.withdwalRequestList ?? [];
-}
-
-/** Cancelled service requests. Plain JSON {instituteid}. Read-only list. Backend key has a typo (`cencelled`). */
-export async function getCancelledRequests(client, session) {
-  const body = await client.postRaw("/servicerequestbystudent/getcancelledwalservicerequests", {
-    instituteid: session.instituteid,
-  });
-  return body.response?.cencelledRequestList ?? [];
 }
 

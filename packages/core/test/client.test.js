@@ -42,7 +42,7 @@ describe("client", () => {
       }),
       now: () => NOW,
     });
-    await client.postRaw("/studentfeeledger/loadfeesummary", { instituteid: "i1" });
+    await client.postRaw("/fixture/postRaw", { instituteid: "i1" });
     assert.equal(seen.init.body, JSON.stringify({ instituteid: "i1" }));
     assert.ok(seen.init.headers.LocalName.length > 10);
   });
