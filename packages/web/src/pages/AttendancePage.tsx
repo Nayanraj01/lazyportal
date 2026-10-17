@@ -28,7 +28,7 @@ import {
   getCachedLov,
   setCachedLov,
 } from "../sections/attendance";
-import { combinedAttendance } from "../lib/attendanceCalc";
+import { combinedAttendance, isSubjectDetailComplete } from "../lib/attendanceCalc";
 
 export function AttendancePage({
   session,
@@ -564,6 +564,8 @@ export function AttendancePage({
               const subId = rowSubId(r);
               const isSubjectSyncing = syncingIds.has(subId);
               const attInfo = combinedAttendance(r, detailsMap[subId]);
+              const hasPercentage = attInfo.pctNum !== null;
+              const hasDetail = isSubjectDetailComplete(r, detailsMap[subId]);
 
               return (
                 <button
@@ -578,24 +580,22 @@ export function AttendancePage({
                     <span className="att-subject-supporting">
                       {badge && <span className="att-code">{badge}</span>}
                       {badge && " · "}
-                      {isSubjectSyncing ? (
-                        <span className="att-count-syncing">
-                          <span className="sync-pulse-dot" aria-hidden="true" />
-                          Refreshing…
-                        </span>
-                      ) : attInfo.hasHeldClasses && attInfo.totalClasses > 0 ? (
+                      {attInfo.totalClasses > 0 ? (
                         `${attInfo.totalPresent}/${attInfo.totalClasses} classes`
-                      ) : attInfo.hasHeldClasses && attInfo.totalClasses === 0 ? (
-                        attInfo.components.L?.pct != null && attInfo.components.T?.pct != null
-                          ? `L: ${attInfo.components.L.pct}% · T: ${attInfo.components.T.pct}%`
-                          : "Classes held"
+                      ) : !hasDetail || hasPercentage ? (
+                        isSyncing ? "Loading classes…" : "Class details unavailable"
                       ) : (
                         "No classes yet"
                       )}
+                      {isSubjectSyncing && (
+                        <span className="att-count-syncing" role="status" aria-label="Updating class details">
+                          <span className="sync-pulse-dot" aria-hidden="true" />
+                        </span>
+                      )}
                     </span>
                   </div>
-                  <span className={`att-row-pct ${attInfo.hasHeldClasses && attInfo.totalClasses > 0 ? attInfo.colorClass : "is-empty"} ${isSubjectSyncing ? "att-pct-syncing" : ""}`}>
-                    {isSubjectSyncing ? "…" : attInfo.hasHeldClasses && attInfo.pct !== "—" ? attInfo.pct : "--"}
+                  <span className={`att-row-pct ${hasPercentage ? attInfo.colorClass : "is-empty"}`}>
+                    {hasPercentage ? attInfo.pct : "--"}
                   </span>
                 </button>
               );

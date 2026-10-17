@@ -195,7 +195,8 @@ export function SubjectDetailSheet({
           )}
 
           {/* Empty state when no classes held yet */}
-          {!attInfo.hasHeldClasses && !detail.loading && (
+          {!attInfo.hasHeldClasses && attInfo.pctNum === null &&
+            isSubjectDetailComplete(row, activeDetail) && !detail.loading && !detail.error && (
             <div className="att-empty-held-card">
               <span className="att-empty-icon" aria-hidden="true">📋</span>
               <p>No classes held yet.</p>
