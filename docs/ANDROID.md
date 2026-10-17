@@ -56,7 +56,9 @@ Two things must stay in sync:
 1. `WEBVIEW_ORIGIN` in `shared/cors.js` ↔ `server.url` in `capacitor.config.json`
    (a test asserts this).
 2. `PROD_API_BASE` in `packages/web/src/lib/apiBase.js` ↔ the deployed proxy URL.
-   Changing the deployment URL means updating this constant and redeploying.
+   Installed apps call this baked-in address directly; moving the deployment requires
+   updating this constant and redistributing the APK (`npm run cap:sync` + `npm run android:apk`).
+   Forks should set `VITE_NATIVE_API_BASE`.
 
 ## Icons and splash
 
@@ -128,13 +130,6 @@ physical device or emulator, against the deployed proxy:
 1. Fresh install, log in, open attendance — no CORS/`NETWORK_ERROR`.
 2. Rotate, background 1 min, foreground — session holds, no white screen.
 3. Lock/unlock — no re-login prompt unless the token truly expired.
-
-## If the proxy deployment moves
-
-Installed apps keep calling the baked-in `PROD_API_BASE`
-(`packages/web/src/lib/apiBase.js`) — there is no update channel. Recovery is a
-new app build: update the constant, `npm run cap:sync`, `npm run android:apk`,
-redistribute. Forks should set `VITE_NATIVE_API_BASE` to their own proxy.
 
 ## Live reload (dev only)
 

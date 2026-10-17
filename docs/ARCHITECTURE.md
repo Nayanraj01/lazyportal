@@ -11,6 +11,7 @@ Small interfaces, everything tricky behind them.
 | `session.js` | `createStore`, `memoryAdapter`, `browserLocalAdapter`, `isExpired` | JWT expiry checks, `juet.portal.*` key names |
 | `client.js` | `createClient` gives `{post, postRaw, getPublic}` | AES bodies, `Authorization` + `LocalName` headers, 401 mapping. `postRaw`/`getPublic` exist because some endpoints take plain JSON or no auth headers |
 | `auth.js` | `fetchCaptcha`, `login` | The two-step login, single-use `random`, parent `P` prefix |
+| `captcha.js` | `solveCaptcha` | Offscreen canvas template matcher for the 5-character Arial captcha (no OCR/ML dependencies) |
 | `features.js` | `getAttendance*` (+`fetchSubjectAttendance`/`getSubjectAttendanceAll`), `getMarks*`, `getExam*`, `getGrade*`, `getSgpa*`, `getChoice*`, `getFacultyRegistrations`/`getFaculties` | Endpoint paths and payload shapes (read-only views, no payments) |
 
 Tests inject the clock, random source, storage, and fetch, so nothing touches the network.
@@ -49,6 +50,10 @@ returns 500/empty even officially). New reads: check `main.*.js` for the
 function in `features.js` with a mocked-client test, then a section file plus one
 registry line. UI never imports `crypto`.
 
+The floating install card (`lib/installPrompt.js`, `components/InstallBanner.tsx`) handles
+`beforeinstallprompt` on Android and Share → Add to Home Screen guidance on iOS Safari,
+with a 14-day dismissal cooldown in `localStorage`.
+
 ## Proxy (`api/`)
 
 | Module | What you call | What it hides |
@@ -56,7 +61,18 @@ registry line. UI never imports `crypto`.
 | `proxy.js` | Vercel handler for `/api/:path*` | Origin/Referer spoofing, StudentPortalAPI path confinement, GET/HEAD/POST method allow-list, hop-by-hop header stripping, `rejectUnauthorized:false` scoped to the portal host, cookie relay, backpressure-aware response streaming, shared HTTPS idle pool, disconnect cancellation, timeout/502 mapping |
 | `shared/cors.js` | `corsHeaders`, `preflightHeaders` | The only origin allowed cross-origin: the Capacitor shell's origin (`WEBVIEW_ORIGIN` ↔ `server.url`, a test asserts the sync). Browser builds are same-origin and need none of it |
 
-Performance design and Fluid validation: [PERFORMANCE.md](PERFORMANCE.md).
+### Streaming & resource limits
+
+- Responses relay via `pipeline` with backpressure; `config.supportsResponseStreaming: true` prevents Vercel buffering.
+- POST bodies are capped at 512 KiB (HTTP 413) without tearing down the socket.
+- Warm invocations share a keep-alive HTTPS agent (≤8 idle sockets, ≤5s retention).
+- Downstream disconnect cleanly aborts the upstream request.
+
+### Client scheduling & caching
+
+- Portal day cutover occurs at 02:00 AM IST (`portalSchedule.ts`), resetting daily refresh quotas.
+- Attendance refreshes use row checksums (`doesSubjectNeedDeepFetch`) to skip redundant deep-fetch POSTs when cached details are unchanged.
+- In-memory read-through cache for features and sessions, with 20s cooldowns on manual refresh buttons.
 
 ## Native shell (`android/`)
 

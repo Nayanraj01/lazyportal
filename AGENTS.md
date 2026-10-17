@@ -16,8 +16,7 @@ npm run android:apk               # cap:sync + ./gradlew assembleDebug
 ## Rules
 
 - Web never imports `crypto`, never hardcodes endpoint strings — all protocol lives in core.
-- The native shell (Capacitor) points to the live hosted deployment (`server.url: "https://lazyportal-tan.vercel.app"` in `capacitor.config.json`), ensuring users receive instant daily web updates without reinstalling APKs. `shared/cors.js` echoes this origin (`WEBVIEW_ORIGIN` ↔ `capacitor.config.json`). Web code never calls the portal host directly.
-- New reads: one function in `packages/core/src/features.js` + mocked-client test, then one section file + one line in `packages/web/src/sections/index.ts`. Reuse `useFeature`, `useSemester`, `DataViews`.
-- Sections have `enabled?: boolean` — set `false` to park broken ones (grades/CGPA: portal 500s), don't delete.
+- Web code never calls the portal host directly; all requests route through the proxy / apiBase.
+- New reads: one function in `packages/core/src/features.js` + mocked-client test, then one section file + one line in `packages/web/src/sections/index.ts` (use `enabled: false` to park broken sections instead of deleting). Reuse `useFeature`, `useSemester`, `DataViews`.
 - No payments / money-movement, ever. Views are read-only.
-- Details in `docs/ARCHITECTURE.md`, `docs/PROTOCOL.md` and `docs/ANDROID.md` (native shell: API base, icons, releases).
+- Details in `docs/ARCHITECTURE.md`, `docs/PROTOCOL.md` and `docs/ANDROID.md`.
