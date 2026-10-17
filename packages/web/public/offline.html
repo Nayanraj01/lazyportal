@@ -3,41 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-  <title>Check yo Internet Bro · JUET Portal</title>
+  <title>Offline</title>
   <style>
     :root {
-      --bg: #FCF8FD;
-      --card-bg: #FFFFFF;
-      --text: #1C1B1F;
-      --subtext: #49454F;
-      --border: #E7E0EC;
-      --primary: #1a237e;
-      --primary-hover: #283593;
-      --primary-text: #FFFFFF;
-      --badge-offline-bg: #FFEBEE;
-      --badge-offline-text: #C62828;
-      --badge-offline-dot: #E53935;
-      --badge-online-bg: #E8F5E9;
-      --badge-online-text: #2E7D32;
-      --badge-online-dot: #43A047;
+      --surface: #FAF8FF;
+      --surface-container: #E8E7EF;
+      --on-surface: #1A1B21;
+      --on-surface-variant: #45464F;
+      --primary: #3F51B5;
+      --on-primary: #FFFFFF;
+      --error-container: #FFDAD6;
+      --on-error-container: #410002;
+      --spring: cubic-bezier(0.2, 1.4, 0.3, 1);
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #141316;
-        --card-bg: #1F1E24;
-        --text: #E6E1E5;
-        --subtext: #CAC4D0;
-        --border: #33313B;
-        --primary: #8c9eff;
-        --primary-hover: #b3c0ff;
-        --primary-text: #001064;
-        --badge-offline-bg: #371818;
-        --badge-offline-text: #FF8A80;
-        --badge-offline-dot: #FF5252;
-        --badge-online-bg: #162B1A;
-        --badge-online-text: #81C784;
-        --badge-online-dot: #66BB6A;
+        --surface: #111318;
+        --surface-container: #1E2026;
+        --on-surface: #E2E2E9;
+        --on-surface-variant: #C4C6D0;
+        --primary: #BAC3FF;
+        --on-primary: #031E78;
+        --error-container: #93000A;
+        --on-error-container: #FFDAD6;
       }
     }
 
@@ -49,274 +38,217 @@
     }
 
     body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      min-height: 100vh;
-      min-height: 100dvh;
+      background-color: var(--surface);
+      color: var(--on-surface);
+      font-family: Roboto, system-ui, -apple-system, sans-serif;
+      height: 100dvh;
+      width: 100vw;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+      padding:
+        max(16px, env(safe-area-inset-top))
+        max(20px, env(safe-area-inset-right))
+        max(24px, env(safe-area-inset-bottom))
+        max(20px, env(safe-area-inset-left));
       user-select: none;
       -webkit-user-select: none;
     }
 
-    .container {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 24px 20px;
-      max-width: 380px;
+    .media {
+      flex: 1;
+      min-height: 0;
       width: 100%;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.3px;
-      padding: 4px 12px;
-      border-radius: 999px;
-      background: var(--badge-offline-bg);
-      color: var(--badge-offline-text);
-      margin-bottom: 14px;
-      transition: all 0.25s ease;
-    }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--badge-offline-dot);
-      animation: pulse 1.8s infinite;
-    }
-
-    .status-badge.online {
-      background: var(--badge-online-bg);
-      color: var(--badge-online-text);
-    }
-
-    .status-badge.online .status-dot {
-      background: var(--badge-online-dot);
-      animation: none;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
-    }
-
-    .meme-wrap {
-      width: 100%;
-      max-height: 280px;
-      border-radius: 16px;
+      border-radius: 36px;
       overflow: hidden;
-      margin-bottom: 16px;
-      border: 1px solid var(--border);
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      background: var(--surface-container);
+      margin-bottom: 28px;
     }
 
-    .meme-wrap img {
+    .media img {
       width: 100%;
       height: 100%;
-      max-height: 280px;
       object-fit: cover;
+      object-position: center 15%;
       display: block;
     }
 
-    h1 {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: -0.3px;
-      margin-bottom: 8px;
+    .bottom-sheet {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      flex-shrink: 0;
     }
 
-    p {
-      font-size: 14px;
-      color: var(--subtext);
-      line-height: 1.45;
-      margin-bottom: 20px;
+    .copy {
       padding: 0 4px;
     }
 
-    .actions {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.8px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      font-size: 16px;
+      line-height: 1.45;
+      color: var(--on-surface-variant);
     }
 
     .retry-btn {
       width: 100%;
-      height: 48px;
-      border-radius: 14px;
+      height: 64px;
       border: none;
+      border-radius: 999px;
       background: var(--primary);
-      color: var(--primary-text);
-      font-size: 15px;
+      color: var(--on-primary);
+      font-family: inherit;
+      font-size: 17px;
       font-weight: 700;
+      letter-spacing: 0.1px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      transition: background-color 0.15s ease, transform 0.1s ease, opacity 0.2s ease;
+      gap: 10px;
+      transition:
+        border-radius 0.35s var(--spring),
+        transform 0.2s var(--spring),
+        background-color 0.2s ease,
+        color 0.2s ease;
     }
 
-    .retry-btn:hover {
-      background: var(--primary-hover);
+    .retry-btn:active:not(:disabled) {
+      border-radius: 18px;
+      transform: scale(0.96);
     }
 
-    .retry-btn:active {
-      transform: scale(0.98);
+    .retry-btn.failed {
+      background: var(--error-container);
+      color: var(--on-error-container);
+      border-radius: 20px;
+      animation: shake 0.35s ease;
     }
 
-    .retry-btn:disabled {
-      opacity: 0.7;
-      cursor: not-allowed;
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
     }
 
     .spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      border-top-color: #ffffff;
-      animation: spin 0.8s linear infinite;
+      width: 20px;
+      height: 20px;
+      animation: rotate 0.8s linear infinite;
       display: none;
+      flex-shrink: 0;
+    }
+
+    .spinner circle {
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-dasharray: 42 100;
     }
 
     .retry-btn.loading .spinner {
       display: block;
     }
 
-    @keyframes spin {
+    @keyframes rotate {
       to { transform: rotate(360deg); }
-    }
-
-    .toast {
-      font-size: 12px;
-      color: var(--badge-offline-text);
-      min-height: 16px;
-      font-weight: 500;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-
-    .toast.visible {
-      opacity: 1;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div id="status-badge" class="status-badge">
-      <span class="status-dot"></span>
-      <span id="status-text">No Connection</span>
+  <div class="media">
+    <img src="offline.jpg" alt="Check yo Internet Bro" loading="eager" />
+  </div>
+
+  <div class="bottom-sheet">
+    <div class="copy">
+      <h1>Check yo Internet Bro</h1>
+      <p>Turn on Wi-Fi or mobile data. The portal will load as soon as you're back.</p>
     </div>
 
-    <div class="meme-wrap">
-      <img src="offline.jpg" alt="Check yo Internet Bro" loading="eager" />
-    </div>
-
-    <h1>Check yo Internet Bro</h1>
-    <p>Cannot reach the portal right now. Turn on Wi-Fi or mobile data and try again.</p>
-
-    <div class="actions">
-      <button id="retry-btn" class="retry-btn" type="button">
-        <span class="spinner"></span>
-        <span id="btn-text">Try Again</span>
-      </button>
-      <div id="toast" class="toast" aria-live="polite"></div>
-    </div>
+    <button id="retry-btn" class="retry-btn" type="button">
+      <svg class="spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke-width="3" />
+      </svg>
+      <span id="btn-text">Try Again</span>
+    </button>
   </div>
 
   <script>
     const LIVE_URL = "https://lazyportal-tan.vercel.app";
     const retryBtn = document.getElementById("retry-btn");
     const btnText = document.getElementById("btn-text");
-    const statusBadge = document.getElementById("status-badge");
-    const statusText = document.getElementById("status-text");
-    const toast = document.getElementById("toast");
 
-    let isAttempting = false;
+    let isChecking = false;
 
-    function showToast(msg) {
-      toast.textContent = msg;
-      toast.classList.add("visible");
-      setTimeout(() => {
-        toast.classList.remove("visible");
-      }, 3000);
+    async function canReachPortal() {
+      if (!navigator.onLine) return false;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      try {
+        await fetch(LIVE_URL, {
+          mode: "no-cors",
+          cache: "no-store",
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        return true;
+      } catch {
+        clearTimeout(timeout);
+        return false;
+      }
     }
 
-    function attemptReconnect() {
-      if (isAttempting) return;
-      isAttempting = true;
+    async function checkConnection(manual = false) {
+      if (isChecking) return;
+      isChecking = true;
 
-      retryBtn.classList.add("loading");
-      retryBtn.disabled = true;
-      btnText.textContent = "Checking...";
+      if (manual) {
+        retryBtn.classList.remove("failed");
+        retryBtn.classList.add("loading");
+        btnText.textContent = "Checking...";
+      }
 
-      if (!navigator.onLine) {
-        setTimeout(() => {
-          retryBtn.classList.remove("loading");
-          retryBtn.disabled = false;
-          btnText.textContent = "Try Again";
-          isAttempting = false;
-          showToast("Still offline. Check your network!");
-        }, 800);
+      const ok = await canReachPortal();
+
+      if (ok) {
+        retryBtn.classList.remove("failed");
+        retryBtn.classList.add("loading");
+        retryBtn.disabled = true;
+        btnText.textContent = "Connecting...";
+        window.location.replace(LIVE_URL);
         return;
       }
 
-      btnText.textContent = "Connecting...";
-      // Navigate WebView to the live deployment URL
-      window.location.href = LIVE_URL;
-
-      // In case navigation fails and stays on page:
-      setTimeout(() => {
+      if (manual) {
         retryBtn.classList.remove("loading");
-        retryBtn.disabled = false;
-        btnText.textContent = "Try Again";
-        isAttempting = false;
-      }, 4000);
+        retryBtn.classList.add("failed");
+        btnText.textContent = "Still Offline";
+        setTimeout(() => {
+          retryBtn.classList.remove("failed");
+          btnText.textContent = "Try Again";
+          isChecking = false;
+        }, 1200);
+      } else {
+        isChecking = false;
+      }
     }
 
-    function handleOnline() {
-      statusBadge.classList.add("online");
-      statusText.textContent = "Back Online";
-      btnText.textContent = "Connecting...";
-      retryBtn.classList.add("loading");
-      retryBtn.disabled = true;
-      setTimeout(() => {
-        window.location.href = LIVE_URL;
-      }, 500);
-    }
+    retryBtn.addEventListener("click", () => checkConnection(true));
+    window.addEventListener("online", () => checkConnection(false));
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) checkConnection(false);
+    });
 
-    function handleOffline() {
-      statusBadge.classList.remove("online");
-      statusText.textContent = "No Connection";
-    }
-
-    retryBtn.addEventListener("click", attemptReconnect);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    // Initial check on load
-    if (navigator.onLine) {
-      handleOnline();
-    }
+    // Silent background poll so the app auto-recovers when Wi-Fi or 5G comes back
+    setInterval(() => checkConnection(false), 2500);
   </script>
 </body>
 </html>
