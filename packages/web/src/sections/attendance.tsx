@@ -1,8 +1,7 @@
-import { Fragment, useEffect, useState } from "react";
+import { useState } from "react";
 import { features } from "@juet/core";
 import { client } from "../lib/portal";
 import { useFeature, setCached, getCached, sessionCacheKey } from "../hooks/useFeature";
-import { useSemester } from "../hooks/useSemester";
 import {
   isCurrentPortalDay,
   computeSubjectRowChecksum,
@@ -11,40 +10,16 @@ import {
   type SessionRef,
 } from "../lib/portalSchedule";
 import {
-  CollapsibleCard,
-  SectionError,
-  useCardState,
   titleCase,
-  formatSemester,
   parseIndianDateTime,
 } from "../components/DataViews";
 import {
-  type AttColorClass,
-  type BunkMargin,
   type ClassRecord,
-  type CombinedAttResult,
   cleanDateTime,
-  pct,
-  getColorClass,
-  computeBunkMargin,
   isSubjectDetailComplete,
   parseClassLogs,
   combinedAttendance,
 } from "../lib/attendanceCalc";
-
-export {
-  type AttColorClass,
-  type BunkMargin,
-  type ClassRecord,
-  type CombinedAttResult,
-  cleanDateTime,
-  pct,
-  getColorClass,
-  computeBunkMargin,
-  isSubjectDetailComplete,
-  parseClassLogs,
-  combinedAttendance,
-};
 import type { SectionProps, Semester } from "../types";
 
 export interface AttRow {
@@ -177,49 +152,16 @@ export function CombinedClassLog({
   );
 }
 
-export function SubjectDetail({
-  row,
-  registrationid,
-  registrationcode,
-  session,
-}: {
-  row: AttRow & Record<string, unknown>;
-  registrationid?: string;
-  registrationcode?: string;
-  session: SectionProps["session"];
-}) {
-  const base = { registrationid, registrationcode };
-  const detail = useFeature<Record<string, Record<string, unknown>>>({
-    run: () => features.getSubjectAttendanceAll(client, session, row, base, "current"),
-    deps: [session, registrationid, String(row.subjectid)],
-    cacheKey: getSubjectCacheKey(session.username, registrationid, row, session.instituteid),
-    staleTimeMs: FEATURE_TTL.subjects,
-    isFresh: (updatedAt) => {
-      const fresh = getCachedSubjectDetailEntry(session.username, registrationid, row, session.instituteid);
-      return !doesSubjectNeedDeepFetch(row, fresh.data, updatedAt, fresh.checksum, undefined, true);
-    },
-    writeExtra: (d) => (isSubjectDetailComplete(row, d) ? { checksum: computeSubjectRowChecksum(row) } : {}),
-  });
-
-  if (detail.loading && !detail.data) return <p className="muted">Loading class breakdown…</p>;
-  if (detail.error && !detail.data) return <SectionError label="Subject detail" error={detail.error} retry={detail.retry} />;
-
-  if (!detail.data || Object.keys(detail.data).length === 0) {
-    return <p className="muted">No class records available.</p>;
-  }
-
-  return (
-    <div className="att-detail-grid">
-      <CombinedClassLog data={detail.data} />
-    </div>
-  );
-}
-
 export function subjectName(code?: string): { name: string; badge: string } {
   if (!code) return { name: "", badge: "" };
   const m = code.match(/^(.+?)\(([^)]+)\)$/);
   if (m) return { name: titleCase(m[1].trim()), badge: m[2] };
   return { name: titleCase(code), badge: "" };
+}
+
+/** Stable per-row subject id for cache keys, sync sets, and React keys. */
+export function rowSubId(r: Record<string, unknown>): string {
+  return String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
 }
 
 export function getSubjectCacheKey(
@@ -228,7 +170,7 @@ export function getSubjectCacheKey(
   row: AttRow & Record<string, unknown>,
   instituteid?: string | null,
 ): string {
-  const subId = row.subjectid ?? row.individualsubjectcode ?? row.subjectcode;
+  const subId = rowSubId(row);
   return sessionCacheKey("att.subject", { username, instituteid }, registrationid ?? "default", subId);
 }
 
@@ -332,142 +274,4 @@ export function useAttendanceSummary(session: SectionProps["session"]) {
     ? (shortsCount > 0 ? `${shortsCount} short` : "All clear")
     : (att.loading ? "Loading…" : "Subject breakdown");
   return { shortsCount, badgeText, loading: att.loading };
-}
-
-export function AttendanceSection({ session, onLogout }: SectionProps) {
-  const card = useCardState("attendance", true);
-  const att = useAttendanceInitial(session);
-  const initial = att.data;
-  const [semId, setSemId, sem] = useSemester(sessionCacheKey("semester", session, "attendance"), initial?.semesters);
-  const isDefault = semId === String(initial?.semesters?.[0]?.registrationid);
-  const detail = useFeature<{ rows: AttRow[] }>({
-    run: () =>
-      features.getAttendanceDetail(client, session, {
-        stynumber: initial?.header?.stynumber,
-        registrationid: sem?.registrationid,
-        registrationcode: sem?.registrationcode,
-      }),
-    deps: [session, semId],
-    enabled: sem !== null && !isDefault,
-    cacheKey: semId ? sessionCacheKey("att.detail", session, semId) : undefined,
-    staleTimeMs: FEATURE_TTL.pastDetail,
-  });
-
-  const rows = isDefault ? (initial?.rows ?? []) : (detail.data?.rows ?? []);
-  const semesters = initial?.semesters ?? [];
-  const [open, setOpen] = useState<number | null>(null);
-
-  useEffect(() => {
-    setOpen(null);
-  }, [semId]);
-
-  const loading = att.loading || detail.loading;
-  const error = att.error ?? detail.error;
-  const retry = att.error ? att.retry : detail.retry;
-
-  const shortsCount = rows.filter((r) => combinedAttendance(r).isShort).length;
-  const badgeText = rows.length > 0 ? (shortsCount > 0 ? `${shortsCount} short` : "All clear") : undefined;
-
-  return (
-    <CollapsibleCard
-      id="attendance"
-      title="Attendance"
-      badge={badgeText}
-      badgeShort={shortsCount > 0}
-      defaultOpen={true}
-      isOpen={card.isOpen}
-      onToggle={card.toggle}
-      action={
-        semesters.length > 1 ? (
-          <select
-            value={semId ?? ""}
-            onChange={(e) => setSemId(e.target.value)}
-            disabled={loading}
-            className="sem-picker"
-          >
-            {semesters.map((s) => (
-              <option key={String(s.registrationid)} value={String(s.registrationid)}>
-                {formatSemester(s.registrationcode ?? s.registrationdesc)}
-              </option>
-            ))}
-          </select>
-        ) : undefined
-      }
-    >
-      {loading && <p className="muted">Loading…</p>}
-      {rows.length > 0 && (
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Subject</th>
-                <th className="num-col">Attendance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => {
-                const { name, badge } = subjectName(r.subjectcode);
-                const attInfo = combinedAttendance(r);
-                const isOpen = open === i;
-                return (
-                  <Fragment key={i}>
-                    <tr
-                      className={`clickable-row ${isOpen ? "active-row" : ""}`}
-                      onClick={() => setOpen(isOpen ? null : i)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setOpen(isOpen ? null : i);
-                        }
-                      }}
-                      tabIndex={0}
-                      role="button"
-                      aria-expanded={isOpen}
-                      title="Tap to see class-by-class attendance"
-                    >
-                      <td>
-                        <div className="sub-row">
-                          <span className="row-chevron" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
-                          <div className="sub-content">
-                            <div className="sub-header-line">
-                              {badge && <span className="badge">{badge}</span>}
-                              <span className="sub-name">{name}</span>
-                            </div>
-                            {attInfo.margin.text && (
-                              <span className={`bunk-note ${attInfo.margin.type}`}>
-                                {attInfo.margin.text}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className={`num-col ${attInfo.colorClass}`}>
-                        {attInfo.pct}
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr className="detail-expanded-row">
-                        <td colSpan={2}>
-                          <SubjectDetail
-                            row={r as AttRow & Record<string, unknown>}
-                            registrationid={sem?.registrationid}
-                            registrationcode={sem?.registrationcode}
-                            session={session}
-                          />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {initial && rows.length === 0 && !error && !loading && (
-        <p className="muted">No attendance rows found.</p>
-      )}
-      {error && <SectionError label="Attendance" error={error} retry={retry} />}
-    </CollapsibleCard>
-  );
 }

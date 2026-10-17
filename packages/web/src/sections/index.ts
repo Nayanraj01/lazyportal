@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
 import type { SectionProps } from "../types";
-import { AttendanceSection } from "./attendance";
 import { MarksSection } from "./marks";
 import { GradesSection } from "./grades";
 import { CgpaSection } from "./cgpa";
@@ -19,10 +18,11 @@ export interface SectionEntry {
 /**
  * Dashboard registry. One line per section, rendered in order.
  * To turn a section off, set enabled: false. To drop it, delete its line + file.
+ * Attendance is not listed: the dashboard hero card links to the full
+ * AttendancePage (see pages/AttendancePage.tsx) instead of a dashboard card.
  * Grades/CGPA are off: new portal returns 500/empty even officially. Flip on when fixed.
  */
 export const SECTIONS: SectionEntry[] = [
-  { id: "attendance", label: "Attendance", Component: AttendanceSection },
   { id: "marks", label: "Marks", Component: MarksSection },
   { id: "grades", label: "Grades", Component: GradesSection, enabled: false },
   { id: "cgpa", label: "CGPA", Component: CgpaSection, enabled: false },

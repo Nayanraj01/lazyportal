@@ -84,12 +84,6 @@ export function SectionError({ label, error, retry }: { label: string; error: st
   );
 }
 
-/** Number() yields NaN for non-numeric input — coerce those to 0 so one bad row can't poison the total. */
-export function num(v: unknown): number {
-  const n = Number(v ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
-
 /** Parse an exam/class datetime string in Indian portal formats (DD-MM-YYYY or DD/MM/YYYY with optional time). */
 export function parseIndianDateTime(dt?: string): number | null {
   if (!dt) return null;
@@ -126,24 +120,8 @@ export function countdown(ms: number): string {
   return "today";
 }
 
-export function pct(v: string | number | undefined | null): number | null {
-  if (v == null) return null;
-  const s = String(v).replace("%", "").trim();
-  if (s === "") return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
-
 function getSectionIcon(id?: string) {
   switch (id) {
-    case "attendance":
-      return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-          <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-          <path d="m9 14 2 2 4-4" />
-        </svg>
-      );
     case "marks":
       return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

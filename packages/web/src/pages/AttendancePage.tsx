@@ -19,7 +19,7 @@ import {
   type AttRow,
   type AttData,
   subjectName,
-  combinedAttendance,
+  rowSubId,
   getCachedSubjectDetail,
   getCachedSubjectDetailEntry,
   setCachedSubjectDetail,
@@ -27,6 +27,7 @@ import {
   getCachedLov,
   setCachedLov,
 } from "../sections/attendance";
+import { combinedAttendance } from "../lib/attendanceCalc";
 
 export function AttendancePage({
   session,
@@ -139,7 +140,7 @@ export function AttendancePage({
     for (const r of rows) {
       const cached = getCachedSubjectDetail(session.username, semId, r, session.instituteid);
       if (cached) {
-        const subId = String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
+        const subId = rowSubId(r);
         map[subId] = cached;
       }
     }
@@ -167,7 +168,7 @@ export function AttendancePage({
     const toFetch: (AttRow & Record<string, unknown>)[] = [];
 
     for (const r of rows) {
-      const subId = String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
+      const subId = rowSubId(r);
       const entry = getCachedSubjectDetailEntry(session.username, semId, r, session.instituteid);
       if (entry.data) {
         currentMap[subId] = entry.data;
@@ -198,14 +199,13 @@ export function AttendancePage({
         while (queue.length > 0 && isLive && !isAborted && getSessionStatus() !== "expired" && isCacheGenerationCurrent(generation)) {
           const r = queue.shift();
           if (!r) break;
-          const subId = String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
+          const subId = rowSubId(r);
           if (isLive) {
             setSyncingIds((prev) => new Set(prev).add(subId));
           }
           try {
             const data = await features.getSubjectAttendanceAll(client, session, r, base, "current");
             if (pageIsLive.current && data && isCacheGenerationCurrent(generation) && getSessionStatus() !== "expired") {
-              const subId = String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
               setCachedSubjectDetail(session, semId, r, data);
               setDetailsMap((prev) => ({ ...prev, [subId]: data }));
               if (isLive && !isAborted) {
@@ -273,7 +273,7 @@ export function AttendancePage({
     let count = 0;
     const filtered: (AttRow & Record<string, unknown>)[] = [];
     for (const r of rows) {
-      const subId = String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
+      const subId = rowSubId(r);
       const isShort = combinedAttendance(r, detailsMap[subId]).isShort;
       if (isShort) count++;
       if (filter === "all" || isShort) {
@@ -348,8 +348,8 @@ export function AttendancePage({
       const activeRows = freshRows ?? rows;
       const rowsDiffered = baselineRows.length > 0
         ? (baselineRows.length !== (freshRows?.length ?? 0) || (freshRows ?? []).some((fr) => {
-            const subId = String(fr.subjectid ?? fr.individualsubjectcode ?? fr.subjectcode);
-            const oldRow = baselineRows.find((or) => String(or.subjectid ?? or.individualsubjectcode ?? or.subjectcode) === subId);
+            const subId = rowSubId(fr);
+            const oldRow = baselineRows.find((or) => rowSubId(or) === subId);
             if (!oldRow) return true;
             return computeSubjectRowChecksum(fr) !== computeSubjectRowChecksum(oldRow);
           }))
@@ -537,7 +537,7 @@ export function AttendancePage({
           {filteredRows.length > 0 &&
             filteredRows.map((r, i) => {
               const { name, badge } = subjectName(r.subjectcode);
-              const subId = String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
+              const subId = rowSubId(r);
               const isSubjectSyncing = syncingIds.has(subId);
               const attInfo = combinedAttendance(r, detailsMap[subId]);
 

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { auth } from "@juet/core";
 import { getSessionStatus } from "../lib/portal";
 import { titleCase, formatLastSync, shouldThrottleRefresh, recordRefreshAttempt } from "../components/DataViews";
 import { subscribePortalDayRollover } from "../lib/portalSchedule";
@@ -115,8 +114,7 @@ export function DashboardPage({
   };
 
   const institutes = (session.institutelist as InstituteOption[] | undefined) ?? [];
-  const visible = SECTIONS.filter((s) => s.enabled !== false);
-  const otherSections = visible.filter((s) => s.id !== "attendance");
+  const sections = SECTIONS.filter((s) => s.enabled !== false);
   const displayName = titleCase(session.name ?? session.enrollmentno ?? "Student");
 
   const [view, setView] = useState<"dashboard" | "attendance">(() => {
@@ -294,7 +292,7 @@ export function DashboardPage({
         </button>
 
         <div className="m3-stacked-sections" role="list">
-          {otherSections.map(({ id, Component }) => (
+          {sections.map(({ id, Component }) => (
             <Component
               key={`${id}:${String(session.instituteid ?? "")}`}
               session={session}
