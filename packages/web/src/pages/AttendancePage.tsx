@@ -19,6 +19,7 @@ import {
   type AttRow,
   type AttData,
   subjectName,
+  subjectRowId,
   combinedAttendance,
   getCachedSubjectDetail,
   getCachedSubjectDetailEntry,
@@ -139,8 +140,7 @@ export function AttendancePage({
     for (const r of rows) {
       const cached = getCachedSubjectDetail(session.username, semId, r, session.instituteid);
       if (cached) {
-        const subId = String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
-        map[subId] = cached;
+        map[subjectRowId(r)] = cached;
       }
     }
     return map;
@@ -148,11 +148,8 @@ export function AttendancePage({
 
   const activeSelectedSubject = useMemo(() => {
     if (!selectedSubject) return null;
-    const subId = String(selectedSubject.subjectid ?? selectedSubject.individualsubjectcode ?? selectedSubject.subjectcode);
-    const found = rows.find((r) => {
-      const id = String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
-      return id === subId;
-    });
+    const subId = subjectRowId(selectedSubject);
+    const found = rows.find((r) => subjectRowId(r) === subId);
     return (found as (AttRow & Record<string, unknown>) | undefined) ?? selectedSubject;
   }, [selectedSubject, rows]);
 
@@ -161,7 +158,7 @@ export function AttendancePage({
       const entry = getCachedSubjectDetailEntry(
         session.username,
         semId,
-        { subjectid: subId, subjectcode: subId } as AttRow & Record<string, unknown>,
+        subId,
         session.instituteid
       );
       if (entry.updatedAt && loadedUpdatedAt && entry.updatedAt > loadedUpdatedAt && entry.data !== data) {
@@ -628,15 +625,7 @@ export function AttendancePage({
           registrationid={sem?.registrationid}
           registrationcode={sem?.registrationcode}
           session={session}
-          cachedDetail={
-            detailsMap[
-              String(
-                activeSelectedSubject.subjectid ??
-                  activeSelectedSubject.individualsubjectcode ??
-                  activeSelectedSubject.subjectcode
-              )
-            ]
-          }
+          cachedDetail={detailsMap[subjectRowId(activeSelectedSubject)]}
           onDetailLoaded={handleDetailLoaded}
           onClose={() => setSelectedSubject(null)}
           onLogout={onLogout}

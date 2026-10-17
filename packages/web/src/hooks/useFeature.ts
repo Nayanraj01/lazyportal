@@ -126,7 +126,7 @@ export function getCached<T>(key?: string): { data: T | null; updatedAt: number 
     }
     const hit = memoryCache.get(key);
     if (hit && hit.raw === raw) {
-      return hit.parsed as { data: T | null; updatedAt: number | null; checksum?: string | null } & Record<string, unknown>;
+      return { ...hit.parsed } as { data: T | null; updatedAt: number | null; checksum?: string | null } & Record<string, unknown>;
     }
     const parsed = JSON.parse(raw);
     let result: { data: T | null; updatedAt: number | null; checksum?: string | null } & Record<string, unknown>;
@@ -137,10 +137,23 @@ export function getCached<T>(key?: string): { data: T | null; updatedAt: number 
       result = { data: parsed as T, updatedAt: null };
     }
     memoryCache.set(key, { raw, parsed: result });
-    return result;
+    return { ...result };
   } catch {
     return { data: null, updatedAt: null };
   }
+}
+
+export function resolveTargetScope(
+  scope?: "dashboard" | "attendance" | "subject" | "all",
+  cacheKey?: string,
+): "dashboard" | "attendance" | "subject" | "all" {
+  return scope ?? (
+    cacheKey?.startsWith("att.subject")
+      ? "subject"
+      : cacheKey?.startsWith("att.")
+      ? "attendance"
+      : "dashboard"
+  );
 }
 
 export function setCached<T>(key: string | undefined, data: T, extra?: Record<string, unknown>): number {
@@ -179,13 +192,7 @@ export function useFeature<T>({
   scope,
   writeExtra,
 }: UseFeatureOptions<T>) {
-  const targetScope = scope ?? (
-    cacheKey?.startsWith("att.subject")
-      ? "subject"
-      : cacheKey?.startsWith("att.")
-      ? "attendance"
-      : "dashboard"
-  );
+  const targetScope = resolveTargetScope(scope, cacheKey);
   const [state, setState] = useState<FeatureState<T>>(() => createFeatureState<T>(cacheKey, enabled));
   // Resolve against the requested key during render, so an institute/semester
   // switch cannot briefly show the previous key's data before effects run.

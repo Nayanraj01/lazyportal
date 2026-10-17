@@ -221,6 +221,11 @@ export function SubjectDetail({
   );
 }
 
+export function subjectRowId(row?: Record<string, unknown> | null): string {
+  if (!row) return "";
+  return String(row.subjectid ?? row.individualsubjectcode ?? row.subjectcode ?? "");
+}
+
 export function subjectName(code?: string): { name: string; badge: string } {
   if (!code) return { name: "", badge: "" };
   const m = code.match(/^(.+?)\(([^)]+)\)$/);
@@ -231,10 +236,10 @@ export function subjectName(code?: string): { name: string; badge: string } {
 export function getSubjectCacheKey(
   username: string,
   registrationid: string | undefined | null,
-  row: AttRow & Record<string, unknown>,
+  rowOrId: (AttRow & Record<string, unknown>) | string,
   instituteid?: string | null,
 ): string {
-  const subId = row.subjectid ?? row.individualsubjectcode ?? row.subjectcode;
+  const subId = typeof rowOrId === "string" ? rowOrId : subjectRowId(rowOrId);
   return sessionCacheKey("att.subject", { username, instituteid }, registrationid ?? "default", subId);
 }
 
@@ -247,10 +252,10 @@ export interface SubjectDetailCacheEntry {
 export function getCachedSubjectDetailEntry(
   username: string,
   registrationid: string | undefined | null,
-  row: AttRow & Record<string, unknown>,
+  rowOrId: (AttRow & Record<string, unknown>) | string,
   instituteid?: string | null,
 ): SubjectDetailCacheEntry {
-  const key = getSubjectCacheKey(username, registrationid, row, instituteid);
+  const key = getSubjectCacheKey(username, registrationid, rowOrId, instituteid);
   const cached = getCached<Record<string, Record<string, unknown>>>(key);
   return {
     data: cached.data,
@@ -262,10 +267,10 @@ export function getCachedSubjectDetailEntry(
 export function getCachedSubjectDetail(
   username: string,
   registrationid: string | undefined | null,
-  row: AttRow & Record<string, unknown>,
+  rowOrId: (AttRow & Record<string, unknown>) | string,
   instituteid?: string | null,
 ): Record<string, Record<string, unknown>> | null {
-  return getCachedSubjectDetailEntry(username, registrationid, row, instituteid).data;
+  return getCachedSubjectDetailEntry(username, registrationid, rowOrId, instituteid).data;
 }
 
 export function setCachedSubjectDetail(

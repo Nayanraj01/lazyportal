@@ -7,6 +7,7 @@ import type { Session } from "../types";
 import {
   type AttRow,
   subjectName,
+  subjectRowId,
   combinedAttendance,
   computeBunkMargin,
   getColorClass,
@@ -69,7 +70,7 @@ export function SubjectDetailSheet({
 
   useEffect(() => {
     if (detail.data && onDetailLoadedRef.current) {
-      const subId = String(row.subjectid ?? row.individualsubjectcode ?? row.subjectcode);
+      const subId = subjectRowId(row);
       onDetailLoadedRef.current(subId, detail.data, detail.updatedAt);
     }
   }, [detail.data, detail.updatedAt, row]);
@@ -203,7 +204,7 @@ export function SubjectDetailSheet({
         {/* Detailed Class History Log */}
         <div className="att-sheet-history-section">
           {detail.loading && !activeDetail && <p className="muted">Loading class breakdown…</p>}
-          {detail.error && !activeDetail && (
+          {detail.error && (
             <SectionError label="Subject detail" error={detail.error} retry={detail.retry} />
           )}
           {activeDetail && Object.keys(activeDetail).length > 0 && (
