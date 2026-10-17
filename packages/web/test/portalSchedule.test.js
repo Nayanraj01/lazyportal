@@ -648,18 +648,63 @@ test("clamp safely handles non-finite values (Infinity, NaN) by defaulting to mi
   assert.equal(qInf.used, 0);
 });
 
-test("SubjectDetailSheet isFresh checks isCurrentPortalDay and forces revalidation on day rollover", () => {
+test("SubjectDetailSheet isFresh relies on row checksum and skips redundant POST across day rollover when checksum matches", () => {
   const row = { subjectcode: "CS101", totalclass: 10, totalpresent: 8 };
   const checksum = computeSubjectRowChecksum(row);
   const dummyDetail = { L: { totalclass: 10, totalpresent: 8 } };
   const today = Date.UTC(2026, 9, 7, 8, 30, 0); // 14:00 IST Oct 7
   const yesterday = Date.UTC(2026, 9, 6, 8, 30, 0); // 14:00 IST Oct 6
 
-  // If cached yesterday, even with matching checksum, it must be considered not fresh across day boundary
+  // Even across a portal day boundary, if the overview row checksum is identical, deep fetch is skipped
   assert.equal(isCurrentPortalDay(yesterday, today), false);
-  assert.equal(doesSubjectNeedDeepFetch(row, dummyDetail, yesterday, checksum), false);
+  assert.equal(doesSubjectNeedDeepFetch(row, dummyDetail, yesterday, checksum, today), false);
 
-  // Today with matching checksum is fresh
-  assert.equal(isCurrentPortalDay(today, today), true);
-  assert.equal(doesSubjectNeedDeepFetch(row, dummyDetail, today, checksum), false);
+  // If the overview row checksum changed (e.g. a new class was recorded), deep fetch is triggered immediately
+  const updatedRow = { ...row, totalclass: 11, totalpresent: 9 };
+  assert.equal(doesSubjectNeedDeepFetch(updatedRow, dummyDetail, yesterday, checksum, today), true);
+});
+
+test("computeSubjectRowChecksum detects updates in pure-lab Ppercentage even when LTpercantage is 0", () => {
+  const lab1 = {
+    individualsubjectcode: "CS212",
+    Psubjectcomponentid: "comp_p",
+    Ppercentage: "80.0",
+    LTpercantage: "0",
+  };
+  const lab2 = {
+    individualsubjectcode: "CS212",
+    Psubjectcomponentid: "comp_p",
+    Ppercentage: "85.0",
+    LTpercantage: "0",
+  };
+  assert.notEqual(computeSubjectRowChecksum(lab1), computeSubjectRowChecksum(lab2));
+});
+
+test("subscribePortalDayRollover multiplexes multiple subscribers over a single event dispatch", () => {
+  dispatchedEvents = [];
+  let countA = 0;
+  let countB = 0;
+  const unsubA = subscribePortalDayRollover(() => { countA++; });
+  const unsubB = subscribePortalDayRollover(() => { countB++; });
+
+  const listeners = docListeners.get("visibilitychange");
+  assert.equal(listeners?.size, 1, "binds only a single document visibilitychange listener");
+
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 24 * 3600 * 1000;
+    for (const cb of listeners) cb();
+    assert.equal(countA, 1);
+    assert.equal(countB, 1);
+    assert.equal(
+      dispatchedEvents.filter((e) => e === "juet:refresh-attendance").length,
+      1,
+      "dispatches juet:refresh-attendance only once across all subscribers"
+    );
+  } finally {
+    Date.now = realNow;
+    unsubA();
+    unsubB();
+  }
+  assert.equal(docListeners.get("visibilitychange")?.size ?? 0, 0, "cleans up listener when last subscriber unsubscribes");
 });

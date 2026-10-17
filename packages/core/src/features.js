@@ -230,7 +230,20 @@ function isNoAttendance(e) {
   return /no attendance/i.test(msg) || /no attendance/i.test(errList);
 }
 
-/** L/T/P detail for one attendance row in parallel. Skips types with no components. */
+function isComponentKnownEmpty(row, t) {
+  const rawTotal = row[`${t}totalclass`] ?? row[`${t}Totalclass`] ?? row[`${t.toLowerCase()}totalclass`];
+  if (rawTotal === undefined || rawTotal === null || rawTotal === "") return false;
+  const total = Number(rawTotal);
+  if (!Number.isFinite(total) || total > 0) return false;
+  const rawPct = row[`${t}percentage`];
+  if (rawPct !== undefined && rawPct !== null && rawPct !== "") {
+    const numPct = Number(String(rawPct).replace("%", "").trim());
+    if (Number.isFinite(numPct) && numPct > 0) return false;
+  }
+  return true;
+}
+
+/** L/T/P detail for one attendance row in parallel. Skips types with no components or known 0-class components. */
 export async function getSubjectAttendanceAll(client, session, row, { registrationid, registrationcode }, which = "current") {
   const out = {};
   let lastErr = null;
@@ -238,6 +251,10 @@ export async function getSubjectAttendanceAll(client, session, row, { registrati
     ["L", "T", "P"].map(async (t) => {
       const csv = row[`${t}subjectcomponentid`];
       if (!csv) return;
+      if (which === "current" && isComponentKnownEmpty(row, t)) {
+        out[t] = { summary: [] };
+        return;
+      }
       try {
         out[t] = await fetchSubjectAttendance(client, session, which, {
           subjectid: row.subjectid,

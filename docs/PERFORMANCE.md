@@ -37,7 +37,16 @@ redundant calls, while proxy streaming bounds memory consumption under load.
   and Dashboard) rather than enforcing a blunt global lock.
 - Optimize subject sheet inspection with on-demand deep-fetch based on row
   checksums (`doesSubjectNeedDeepFetch`), skipping redundant fetches when totals
-  match existing cached records.
+  and component percentages match existing cached records (including across portal
+  day rollovers and for pure-lab `Ppercentage` rows).
+- Skip per-component attendance detail `POST` requests when the overview row
+  explicitly reports `0` held classes for that component (`L`/`T`/`P`), avoiding
+  guaranteed `"NO Attendance Found"` portal round-trips.
+- Isolate `att.subject` hooks from global `juet:refresh-attendance` broadcasts so
+  an open subject detail sheet does not duplicate the background queue's fetch,
+  and multiplex `subscribePortalDayRollover` across a single shared timer/listener.
+- Back `getCached`/`setCached` and `session.store.load()` with an in-memory
+  read-through cache and memoize IST date parts per minute in `@juet/core` crypto.
 
 Unchanged: API paths/methods, auth headers, Origin/Referer spoofing, cookie
 rewriting, CORS, 45-second upstream inactivity timeout, 60-second function limit,

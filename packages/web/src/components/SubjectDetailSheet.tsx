@@ -19,7 +19,6 @@ import {
   computeSubjectRowChecksum,
   doesSubjectNeedDeepFetch,
   FEATURE_TTL,
-  isCurrentPortalDay,
 } from "../lib/portalSchedule";
 import { WhatIfStepper } from "./WhatIfStepper";
 
@@ -28,6 +27,7 @@ export function SubjectDetailSheet({
   registrationid,
   registrationcode,
   session,
+  onDetailLoaded,
   onClose,
   onLogout: _onLogout,
 }: {
@@ -35,6 +35,7 @@ export function SubjectDetailSheet({
   registrationid?: string;
   registrationcode?: string;
   session: Session;
+  onDetailLoaded?: (subId: string, data: Record<string, Record<string, unknown>>) => void;
   onClose: () => void;
   onLogout: () => void;
 }) {
@@ -53,12 +54,18 @@ export function SubjectDetailSheet({
     cacheKey,
     staleTimeMs: FEATURE_TTL.subjects,
     isFresh: (updatedAt) => {
-      if (!isCurrentPortalDay(updatedAt)) return false;
       const fresh = getCachedSubjectDetailEntry(session.username, registrationid, row, session.instituteid);
       return !doesSubjectNeedDeepFetch(row, fresh.data, updatedAt, fresh.checksum);
     },
     writeExtra: (d) => (isSubjectDetailComplete(row, d) ? { checksum: computeSubjectRowChecksum(row) } : {}),
   });
+
+  useEffect(() => {
+    if (detail.data && onDetailLoaded) {
+      const subId = String(row.subjectid ?? row.individualsubjectcode ?? row.subjectcode);
+      onDetailLoaded(subId, detail.data);
+    }
+  }, [detail.data, onDetailLoaded, row]);
 
   const attInfo = combinedAttendance(row, detail.data, target / 100);
 

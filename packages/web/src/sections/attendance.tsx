@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { features } from "@juet/core";
 import { client } from "../lib/portal";
 import { useFeature, setCached, getCached, sessionCacheKey } from "../hooks/useFeature";
@@ -93,30 +93,36 @@ export function CombinedClassLog({
 }) {
   const [filter, setFilter] = useState<"all" | "absent" | "present">("all");
 
-  const parsedEntries = Object.entries(data)
-    .map(([type, raw]) => ({ type, stats: parseClassLogs(raw, type) }))
-    .filter((item): item is { type: string; stats: NonNullable<ReturnType<typeof parseClassLogs>> } => item.stats !== null);
+  const { total, attended, absent, allClasses } = useMemo(() => {
+    const parsedEntries = Object.entries(data)
+      .map(([type, raw]) => ({ type, stats: parseClassLogs(raw, type) }))
+      .filter((item): item is { type: string; stats: NonNullable<ReturnType<typeof parseClassLogs>> } => item.stats !== null);
 
-  if (parsedEntries.length === 0) {
+    let tot = 0;
+    let att = 0;
+    const classes: { record: ClassRecord; ts: number }[] = [];
+
+    for (const { stats } of parsedEntries) {
+      tot += stats.total;
+      att += stats.attended;
+      for (const c of stats.classes) {
+        classes.push({ record: c, ts: parseIndianDateTime(c.datetime) ?? 0 });
+      }
+    }
+
+    classes.sort((a, b) => b.ts - a.ts);
+
+    return {
+      total: tot,
+      attended: att,
+      absent: tot - att,
+      allClasses: classes.map((item) => item.record),
+    };
+  }, [data]);
+
+  if (total === 0 && allClasses.length === 0) {
     return <p className="muted">No class records available.</p>;
   }
-
-  let total = 0;
-  let attended = 0;
-  const allClasses: ClassRecord[] = [];
-
-  for (const { stats } of parsedEntries) {
-    total += stats.total;
-    attended += stats.attended;
-    for (const c of stats.classes) {
-      allClasses.push(c);
-    }
-  }
-
-  allClasses.sort((a, b) => (parseIndianDateTime(b.datetime) ?? 0) - (parseIndianDateTime(a.datetime) ?? 0));
-
-  const absent = total - attended;
-  const percentage = total > 0 ? ((attended / total) * 100).toFixed(1) : null;
 
   const filtered = allClasses.filter((c) => {
     if (filter === "absent") return !c.isAttended;
@@ -196,7 +202,7 @@ export function SubjectDetail({
     staleTimeMs: FEATURE_TTL.subjects,
     isFresh: (updatedAt) => {
       const fresh = getCachedSubjectDetailEntry(session.username, registrationid, row, session.instituteid);
-      return !doesSubjectNeedDeepFetch(row, fresh.data, updatedAt, fresh.checksum, undefined, true);
+      return !doesSubjectNeedDeepFetch(row, fresh.data, updatedAt, fresh.checksum);
     },
     writeExtra: (d) => (isSubjectDetailComplete(row, d) ? { checksum: computeSubjectRowChecksum(row) } : {}),
   });

@@ -389,7 +389,7 @@ export function AttendancePage({
       }
       refreshInProgress.current = false;
 
-      // Trigger background hook sync and effect prefetch
+      // Sync useAttendanceInitial hook state from the newly written cache (isVeryFresh prevents duplicate network call)
       if (pageIsLive.current && isCacheGenerationCurrent(requestGeneration)) {
         window.dispatchEvent(new CustomEvent("juet:refresh-attendance"));
       }
@@ -602,6 +602,9 @@ export function AttendancePage({
           registrationid={sem?.registrationid}
           registrationcode={sem?.registrationcode}
           session={session}
+          onDetailLoaded={(subId, data) => {
+            setDetailsMap((prev) => (prev[subId] === data ? prev : { ...prev, [subId]: data }));
+          }}
           onClose={() => setSelectedSubject(null)}
           onLogout={onLogout}
         />
