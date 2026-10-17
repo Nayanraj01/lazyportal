@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { features } from "@juet/core";
 import { client, getSessionStatus } from "../lib/portal";
 import { useFeature, getCached, setCached, sessionCacheKey, getCacheGeneration, isCacheGenerationCurrent } from "../hooks/useFeature";
@@ -20,6 +20,7 @@ import {
   type AttData,
   subjectName,
   rowSubId,
+  subjectRowId,
   getCachedSubjectDetail,
   getCachedSubjectDetailEntry,
   setCachedSubjectDetail,
@@ -146,6 +147,29 @@ export function AttendancePage({
     }
     return map;
   });
+
+  const activeSelectedSubject = useMemo(() => {
+    if (!selectedSubject) return null;
+    const subId = subjectRowId(selectedSubject);
+    const found = rows.find((r) => subjectRowId(r) === subId);
+    return (found as (AttRow & Record<string, unknown>) | undefined) ?? selectedSubject;
+  }, [selectedSubject, rows]);
+
+  const handleDetailLoaded = useCallback(
+    (subId: string, data: Record<string, Record<string, unknown>>, loadedUpdatedAt?: number | null) => {
+      const entry = getCachedSubjectDetailEntry(
+        session.username,
+        semId,
+        subId,
+        session.instituteid
+      );
+      if (entry.updatedAt && loadedUpdatedAt && entry.updatedAt > loadedUpdatedAt && entry.data !== data) {
+        return;
+      }
+      setDetailsMap((prev) => (prev[subId] === data ? prev : { ...prev, [subId]: data }));
+    },
+    [session.username, semId, session.instituteid]
+  );
 
   useEffect(() => {
     if (isExpired) {
@@ -389,7 +413,7 @@ export function AttendancePage({
       }
       refreshInProgress.current = false;
 
-      // Trigger background hook sync and effect prefetch
+      // Sync useAttendanceInitial hook state from the newly written cache (isVeryFresh prevents duplicate network call)
       if (pageIsLive.current && isCacheGenerationCurrent(requestGeneration)) {
         window.dispatchEvent(new CustomEvent("juet:refresh-attendance"));
       }
@@ -596,12 +620,14 @@ export function AttendancePage({
       </div>
 
       {/* Slide-over sheet for detailed history */}
-      {selectedSubject && (
+      {activeSelectedSubject && (
         <SubjectDetailSheet
-          row={selectedSubject}
+          row={activeSelectedSubject}
           registrationid={sem?.registrationid}
           registrationcode={sem?.registrationcode}
           session={session}
+          cachedDetail={detailsMap[subjectRowId(activeSelectedSubject)]}
+          onDetailLoaded={handleDetailLoaded}
           onClose={() => setSelectedSubject(null)}
           onLogout={onLogout}
         />

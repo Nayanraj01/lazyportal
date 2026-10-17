@@ -115,13 +115,28 @@ const SESSION_KEY = "session.v1";
 
 /** Store owns serialization. Interface: load/save/clear/loadValid. */
 export function createStore(adapter = memoryAdapter()) {
+  let cachedRaw = null;
+  let cachedSession = null;
+
   return {
     load() {
       const raw = adapter.get(SESSION_KEY);
-      if (!raw) return null;
+      if (!raw) {
+        cachedRaw = null;
+        cachedSession = null;
+        return null;
+      }
+      if (raw === cachedRaw && cachedSession !== null) {
+        return { ...cachedSession };
+      }
       try {
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        cachedRaw = raw;
+        cachedSession = parsed;
+        return { ...parsed };
       } catch {
+        cachedRaw = null;
+        cachedSession = null;
         try {
           adapter.remove(SESSION_KEY);
         } catch {}
@@ -129,9 +144,14 @@ export function createStore(adapter = memoryAdapter()) {
       }
     },
     save(session) {
-      adapter.set(SESSION_KEY, JSON.stringify(session));
+      const raw = JSON.stringify(session);
+      cachedRaw = raw;
+      cachedSession = JSON.parse(raw);
+      adapter.set(SESSION_KEY, raw);
     },
     clear() {
+      cachedRaw = null;
+      cachedSession = null;
       adapter.remove(SESSION_KEY);
     },
     loadValid(opts) {

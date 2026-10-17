@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { features } from "@juet/core";
 import { client } from "../lib/portal";
 import { useFeature } from "../hooks/useFeature";
@@ -7,6 +7,7 @@ import type { Session } from "../types";
 import {
   type AttRow,
   subjectName,
+  subjectRowId,
   getSubjectCacheKey,
   getCachedSubjectDetailEntry,
   CombinedClassLog,
@@ -21,7 +22,6 @@ import {
   computeSubjectRowChecksum,
   doesSubjectNeedDeepFetch,
   FEATURE_TTL,
-  isCurrentPortalDay,
 } from "../lib/portalSchedule";
 import { WhatIfStepper } from "./WhatIfStepper";
 
@@ -30,6 +30,8 @@ export function SubjectDetailSheet({
   registrationid,
   registrationcode,
   session,
+  cachedDetail,
+  onDetailLoaded,
   onClose,
   onLogout: _onLogout,
 }: {
@@ -37,6 +39,8 @@ export function SubjectDetailSheet({
   registrationid?: string;
   registrationcode?: string;
   session: Session;
+  cachedDetail?: Record<string, Record<string, unknown>>;
+  onDetailLoaded?: (subId: string, data: Record<string, Record<string, unknown>>, updatedAt?: number | null) => void;
   onClose: () => void;
   onLogout: () => void;
 }) {
@@ -49,20 +53,32 @@ export function SubjectDetailSheet({
   const base = { registrationid, registrationcode };
   const cacheKey = getSubjectCacheKey(session.username, registrationid, row, session.instituteid);
 
+  const rowChecksum = computeSubjectRowChecksum(row);
+
   const detail = useFeature<Record<string, Record<string, unknown>>>({
     run: () => features.getSubjectAttendanceAll(client, session, row, base, "current"),
-    deps: [session, registrationid, String(row.subjectid)],
+    deps: [session, registrationid, String(row.subjectid), rowChecksum],
     cacheKey,
     staleTimeMs: FEATURE_TTL.subjects,
     isFresh: (updatedAt) => {
-      if (!isCurrentPortalDay(updatedAt)) return false;
       const fresh = getCachedSubjectDetailEntry(session.username, registrationid, row, session.instituteid);
-      return !doesSubjectNeedDeepFetch(row, fresh.data, updatedAt, fresh.checksum);
+      return !doesSubjectNeedDeepFetch(row, fresh.data, updatedAt, fresh.checksum, undefined, true);
     },
     writeExtra: (d) => (isSubjectDetailComplete(row, d) ? { checksum: computeSubjectRowChecksum(row) } : {}),
   });
 
-  const attInfo = combinedAttendance(row, detail.data, target / 100);
+  const onDetailLoadedRef = useRef(onDetailLoaded);
+  onDetailLoadedRef.current = onDetailLoaded;
+
+  useEffect(() => {
+    if (detail.data && onDetailLoadedRef.current) {
+      const subId = subjectRowId(row);
+      onDetailLoadedRef.current(subId, detail.data, detail.updatedAt);
+    }
+  }, [detail.data, detail.updatedAt, row]);
+
+  const activeDetail = detail.data ?? cachedDetail;
+  const attInfo = combinedAttendance(row, activeDetail, target / 100);
 
   // Simulation calculations (supports attending X and leaving Y simultaneously)
   const totalSimPresent = attInfo.totalPresent + attendCount;
@@ -189,13 +205,13 @@ export function SubjectDetailSheet({
 
         {/* Detailed Class History Log */}
         <div className="att-sheet-history-section">
-          {detail.loading && !detail.data && <p className="muted">Loading class breakdown…</p>}
-          {detail.error && !detail.data && (
+          {detail.loading && !activeDetail && <p className="muted">Loading class breakdown…</p>}
+          {detail.error && (
             <SectionError label="Subject detail" error={detail.error} retry={detail.retry} />
           )}
-          {detail.data && Object.keys(detail.data).length > 0 && (
+          {activeDetail && Object.keys(activeDetail).length > 0 && (
             <div className="att-detail-grid">
-              <CombinedClassLog data={detail.data} />
+              <CombinedClassLog data={activeDetail} />
             </div>
           )}
         </div>

@@ -22,7 +22,12 @@ build is static; client scheduling in `lib/portalSchedule.ts` keeps request volu
   `juet:refresh-attendance`. The daily manual refresh quota is not consumed when
   attendance comes back unchanged; 20s refresh throttles are per-screen; subject
   sheet deep-fetches are skipped when row checksums (`doesSubjectNeedDeepFetch`)
-  say the cached detail is still complete.
+  say the cached detail is still complete (including across day rollovers and pure-lab rows).
+- Skip per-component attendance detail POST requests when held count is 0 (`L`/`T`/`P`).
+- Isolate `att.subject` hooks from global `juet:refresh-attendance` broadcasts and
+  multiplex `subscribePortalDayRollover` across a single shared timer.
+- In-memory read-through cache for `getCached`/`setCached` and `session.store.load()`,
+  plus per-minute memoization for IST date formatting in `@juet/core` crypto.
 - Deliberately unchanged: API paths/methods, auth headers, Origin/Referer
   spoofing, cookie relay, CORS, 45s upstream inactivity timeout, 60s function
   limit, login retries. In-flight dedup in core is transient only (`.finally`)

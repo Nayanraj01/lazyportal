@@ -7,6 +7,7 @@ export const IV = "dcek9wb8frty1pnm";
 const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXTZabcdefghiklmnopqrstuvwxyz";
 const te = new TextEncoder();
 const td = new TextDecoder();
+const IV_BYTES = te.encode(IV);
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -20,18 +21,39 @@ const istFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "short",
 });
 
+let lastIstMinute = -1;
+let lastIstParts = null;
+
 /**
  * Return date components in Indian Standard Time (IST, UTC+05:30),
  * which is the timezone evaluated by the JUET portal server.
  */
 export function getIstParts(date = new Date()) {
+  const ms = date instanceof Date ? date.getTime() : Number(date);
+  const minuteBucket = Number.isFinite(ms) ? Math.floor(ms / 60_000) : -1;
+  if (minuteBucket !== -1 && minuteBucket === lastIstMinute && lastIstParts) {
+    return { ...lastIstParts };
+  }
   const parts = istFormatter.formatToParts(date);
-  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
-  const dow = String(DAYS.indexOf(map.weekday));
-  const day = map.day;
-  const month = map.month;
-  const yy = map.year.slice(2);
-  return { day, month, yy, dow };
+  let day = "";
+  let month = "";
+  let year = "";
+  let weekday = "";
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (p.type === "day") day = p.value;
+    else if (p.type === "month") month = p.value;
+    else if (p.type === "year") year = p.value;
+    else if (p.type === "weekday") weekday = p.value;
+  }
+  const dow = String(DAYS.indexOf(weekday));
+  const yy = year.slice(2);
+  const res = { day, month, yy, dow };
+  if (minuteBucket !== -1) {
+    lastIstMinute = minuteBucket;
+    lastIstParts = res;
+  }
+  return { ...res };
 }
 
 /** Date-derived 16-char key in IST. Pure + deterministic for tests. */
@@ -68,6 +90,8 @@ const keyCache = new Map();
 
 export function _resetCryptoCacheForTesting() {
   keyCache.clear();
+  lastIstMinute = -1;
+  lastIstParts = null;
 }
 
 export function _getCryptoCacheSizeForTesting() {
@@ -100,7 +124,7 @@ export async function importKey(now) {
 /** CryptoJS AES.encrypt(plain, Utf8(key), {iv, CBC, Pkcs7}) equivalent. Returns base64. */
 export async function encrypt(plainText, { now = new Date() } = {}) {
   const key = await importKey(now);
-  const ct = await subtle().encrypt({ name: "AES-CBC", iv: te.encode(IV) }, key, te.encode(plainText));
+  const ct = await subtle().encrypt({ name: "AES-CBC", iv: IV_BYTES }, key, te.encode(plainText));
   return bytesToB64(new Uint8Array(ct));
 }
 
@@ -108,7 +132,7 @@ export async function encrypt(plainText, { now = new Date() } = {}) {
 export async function decrypt(cipherB64, { now = new Date() } = {}) {
   const key = await importKey(now);
   const pt = await subtle().decrypt(
-    { name: "AES-CBC", iv: te.encode(IV) },
+    { name: "AES-CBC", iv: IV_BYTES },
     key,
     b64ToBytes(cipherB64)
   );

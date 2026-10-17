@@ -12,7 +12,7 @@ interface UseFeatureOptions<T> {
   staleTimeMs?: number;
   /** Custom freshness check (e.g. portal day schedule). Overrides staleTimeMs when provided. */
   isFresh?: (updatedAt: number | null) => boolean;
-  scope?: "dashboard" | "attendance" | "all";
+  scope?: "dashboard" | "attendance" | "subject" | "all";
   /** Optional extra metadata to persist in the cache entry (e.g. checksum). */
   writeExtra?: Record<string, unknown> | ((data: T) => Record<string, unknown>);
 }
@@ -65,7 +65,23 @@ export function resolveFeatureState<T>(
 
 // ponytail: in-flight request deduplication across concurrent hooks sharing a cacheKey
 const inFlight = new Map<string, Promise<{ data: unknown; updatedAt: number }>>();
+// In-memory read-through cache to eliminate redundant localStorage + JSON.parse on mobile renders
+const memoryCache = new Map<string, { raw: string; parsed: { data: unknown; updatedAt: number | null; checksum?: string | null } & Record<string, unknown> }>();
+let storageListenerBound = false;
 let cacheGeneration = 0;
+
+function ensureStorageListener(): void {
+  if (storageListenerBound || typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+  storageListenerBound = true;
+  window.addEventListener("storage", (e: Event) => {
+    const key = (e as { key?: string | null })?.key;
+    if (!key) {
+      memoryCache.clear();
+    } else if (key.startsWith("juet.cache.")) {
+      memoryCache.delete(key.slice("juet.cache.".length));
+    }
+  });
+}
 
 /** Capture before an async request so it can avoid repopulating cache after logout. */
 export function getCacheGeneration(): number {
@@ -80,6 +96,7 @@ export function isCacheGenerationCurrent(generation: number): boolean {
 export function invalidateCacheGeneration(): void {
   cacheGeneration++;
   inFlight.clear();
+  memoryCache.clear();
 }
 
 /** Build a persistent cache key scoped to both account and selected institute. */
@@ -100,30 +117,61 @@ export function sessionCacheKey(
 
 export function getCached<T>(key?: string): { data: T | null; updatedAt: number | null; checksum?: string | null } & Record<string, unknown> {
   if (!key) return { data: null, updatedAt: null };
+  ensureStorageListener();
   try {
     const raw = localStorage.getItem(`juet.cache.${key}`);
-    if (!raw) return { data: null, updatedAt: null };
+    if (!raw) {
+      memoryCache.delete(key);
+      return { data: null, updatedAt: null };
+    }
+    const hit = memoryCache.get(key);
+    if (hit && hit.raw === raw) {
+      return { ...hit.parsed } as { data: T | null; updatedAt: number | null; checksum?: string | null } & Record<string, unknown>;
+    }
     const parsed = JSON.parse(raw);
+    let result: { data: T | null; updatedAt: number | null; checksum?: string | null } & Record<string, unknown>;
     if (parsed && typeof parsed === "object" && "updatedAt" in parsed && "data" in parsed) {
       const { data, updatedAt, ...rest } = parsed as { data: T; updatedAt: number } & Record<string, unknown>;
-      return { ...rest, data: data as T, updatedAt: updatedAt as number };
+      result = { ...rest, data: data as T, updatedAt: updatedAt as number };
+    } else {
+      result = { data: parsed as T, updatedAt: null };
     }
-    return { data: parsed as T, updatedAt: null };
+    memoryCache.set(key, { raw, parsed: result });
+    return { ...result };
   } catch {
     return { data: null, updatedAt: null };
   }
 }
 
+export function resolveTargetScope(
+  scope?: "dashboard" | "attendance" | "subject" | "all",
+  cacheKey?: string,
+): "dashboard" | "attendance" | "subject" | "all" {
+  return scope ?? (
+    cacheKey?.startsWith("att.subject")
+      ? "subject"
+      : cacheKey?.startsWith("att.")
+      ? "attendance"
+      : "dashboard"
+  );
+}
+
 export function setCached<T>(key: string | undefined, data: T, extra?: Record<string, unknown>): number {
   const now = Date.now();
   if (!key || data == null) return now;
+  ensureStorageListener();
   try {
     const entry: Record<string, unknown> = {
       data,
       updatedAt: now,
       ...(extra ?? {}),
     };
-    localStorage.setItem(`juet.cache.${key}`, JSON.stringify(entry));
+    const raw = JSON.stringify(entry);
+    localStorage.setItem(`juet.cache.${key}`, raw);
+    memoryCache.set(key, {
+      raw,
+      parsed: { ...(extra ?? {}), data, updatedAt: now },
+    });
     if (key.startsWith("att.")) {
       localStorage.setItem("juet.portal.last_sync", String(now));
       window.dispatchEvent(new CustomEvent("juet:sync"));
@@ -144,11 +192,7 @@ export function useFeature<T>({
   scope,
   writeExtra,
 }: UseFeatureOptions<T>) {
-  const targetScope = scope ?? (
-    cacheKey?.startsWith("att.")
-      ? "attendance"
-      : "dashboard"
-  );
+  const targetScope = resolveTargetScope(scope, cacheKey);
   const [state, setState] = useState<FeatureState<T>>(() => createFeatureState<T>(cacheKey, enabled));
   // Resolve against the requested key during render, so an institute/semester
   // switch cannot briefly show the previous key's data before effects run.

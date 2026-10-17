@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <title>Offline</title>
+  <style>
+    :root {
+      --surface: #FAF8FF;
+      --surface-container: #E8E7EF;
+      --on-surface: #1A1B21;
+      --on-surface-variant: #45464F;
+      --primary: #3F51B5;
+      --on-primary: #FFFFFF;
+      --error-container: #FFDAD6;
+      --on-error-container: #410002;
+      --spring: cubic-bezier(0.2, 1.4, 0.3, 1);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --surface: #111318;
+        --surface-container: #1E2026;
+        --on-surface: #E2E2E9;
+        --on-surface-variant: #C4C6D0;
+        --primary: #BAC3FF;
+        --on-primary: #031E78;
+        --error-container: #93000A;
+        --on-error-container: #FFDAD6;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--surface);
+      color: var(--on-surface);
+      font-family: Roboto, system-ui, -apple-system, sans-serif;
+      height: 100dvh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding:
+        max(16px, env(safe-area-inset-top))
+        max(20px, env(safe-area-inset-right))
+        max(24px, env(safe-area-inset-bottom))
+        max(20px, env(safe-area-inset-left));
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .media {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      border-radius: 36px;
+      overflow: hidden;
+      background: var(--surface-container);
+      margin-bottom: 28px;
+    }
+
+    .media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 15%;
+      display: block;
+    }
+
+    .bottom-sheet {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      flex-shrink: 0;
+    }
+
+    .copy {
+      padding: 0 4px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.8px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      font-size: 16px;
+      line-height: 1.45;
+      color: var(--on-surface-variant);
+    }
+
+    .retry-btn {
+      width: 100%;
+      height: 64px;
+      border: none;
+      border-radius: 999px;
+      background: var(--primary);
+      color: var(--on-primary);
+      font-family: inherit;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 0.1px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition:
+        border-radius 0.35s var(--spring),
+        transform 0.2s var(--spring),
+        background-color 0.2s ease,
+        color 0.2s ease;
+    }
+
+    .retry-btn:active:not(:disabled) {
+      border-radius: 18px;
+      transform: scale(0.96);
+    }
+
+    .retry-btn.failed {
+      background: var(--error-container);
+      color: var(--on-error-container);
+      border-radius: 20px;
+      animation: shake 0.35s ease;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      animation: rotate 0.8s linear infinite;
+      display: none;
+      flex-shrink: 0;
+    }
+
+    .spinner circle {
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-dasharray: 42 100;
+    }
+
+    .retry-btn.loading .spinner {
+      display: block;
+    }
+
+    @keyframes rotate {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="media">
+    <img src="offline.jpg" alt="Check yo Internet Bro" loading="eager" />
+  </div>
+
+  <div class="bottom-sheet">
+    <div class="copy">
+      <h1>Check yo Internet Bro</h1>
+      <p>Turn on Wi-Fi or mobile data. The portal will load as soon as you're back.</p>
+    </div>
+
+    <button id="retry-btn" class="retry-btn" type="button">
+      <svg class="spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke-width="3" />
+      </svg>
+      <span id="btn-text">Try Again</span>
+    </button>
+  </div>
+
+  <script>
+    const LIVE_URL = "https://lazyportal-tan.vercel.app";
+    const retryBtn = document.getElementById("retry-btn");
+    const btnText = document.getElementById("btn-text");
+
+    let isChecking = false;
+
+    async function canReachPortal() {
+      if (!navigator.onLine) return false;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      try {
+        await fetch(LIVE_URL, {
+          mode: "no-cors",
+          cache: "no-store",
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        return true;
+      } catch {
+        clearTimeout(timeout);
+        return false;
+      }
+    }
+
+    async function checkConnection(manual = false) {
+      if (isChecking) return;
+      isChecking = true;
+
+      if (manual) {
+        retryBtn.classList.remove("failed");
+        retryBtn.classList.add("loading");
+        btnText.textContent = "Checking...";
+      }
+
+      const ok = await canReachPortal();
+
+      if (ok) {
+        retryBtn.classList.remove("failed");
+        retryBtn.classList.add("loading");
+        retryBtn.disabled = true;
+        btnText.textContent = "Connecting...";
+        window.location.replace(LIVE_URL);
+        return;
+      }
+
+      if (manual) {
+        retryBtn.classList.remove("loading");
+        retryBtn.classList.add("failed");
+        btnText.textContent = "Still Offline";
+        setTimeout(() => {
+          retryBtn.classList.remove("failed");
+          btnText.textContent = "Try Again";
+          isChecking = false;
+        }, 1200);
+      } else {
+        isChecking = false;
+      }
+    }
+
+    retryBtn.addEventListener("click", () => checkConnection(true));
+    window.addEventListener("online", () => checkConnection(false));
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) checkConnection(false);
+    });
+
+    // Silent background poll so the app auto-recovers when Wi-Fi or 5G comes back
+    setInterval(() => checkConnection(false), 2500);
+  </script>
+</body>
+</html>

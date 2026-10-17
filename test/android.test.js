@@ -49,6 +49,9 @@ test("capacitor.config.json identifies the app and the bundle", () => {
   // pass on a clean checkout, before any build.
   assert.ok(exists("packages/web/package.json") && exists("packages/web/vite.config.js"));
   assert.equal(config.server?.url, "https://lazyportal-tan.vercel.app");
+  assert.equal(config.server?.errorPath, "offline.html");
+  assert.ok(exists("packages/web/public/offline.html"), "offline.html must exist");
+  assert.ok(exists("packages/web/public/offline.jpg"), "offline.jpg must exist");
 });
 
 test("native project matches the Capacitor config", () => {

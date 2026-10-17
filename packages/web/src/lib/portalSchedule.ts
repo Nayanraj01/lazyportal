@@ -306,7 +306,14 @@ function pickComponent(row: Record<string, unknown>, prefix: string): string {
  */
 export function computeSubjectRowChecksum(row: Record<string, unknown>): string {
   const subId = pick(row, "subjectid", "individualsubjectcode", "subjectcode");
-  const overall = pick(row, "LTpercantage", "LTpercentage", "overallattendance", "percentage", "attendance");
+  const isLab = Boolean(
+    (row.Psubjectcomponentid || row.Ppercentage) &&
+    !row.Lsubjectcomponentid &&
+    !row.Tsubjectcomponentid
+  );
+  const overall = isLab
+    ? pick(row, "Ppercentage", "LTpercantage", "LTpercentage", "overallattendance", "percentage", "attendance")
+    : pick(row, "LTpercantage", "LTpercentage", "overallattendance", "percentage", "attendance");
   const tot = pick(row, "totalclass", "totalclasses", "Totalclass");
   const pres = pick(row, "totalpresent", "Totalpresent");
   const L = pickComponent(row, "L");
@@ -348,7 +355,7 @@ export function doesSubjectNeedDeepFetch(
     if (cachedChecksum !== currentChecksum) return true;
     // Missing or corrupted timestamp
     if (!cachedUpdatedAt) return true;
-    // When user explicitly views subject sheet, allow fetching if not yet updated in the current portal day
+    // When user explicitly requests a daily check (if opted in), allow fetching if not yet updated in the current portal day
     if (allowIfNotUpdatedToday && !isCurrentPortalDay(cachedUpdatedAt, now)) {
       return true;
     }
@@ -375,45 +382,78 @@ export function doesSubjectNeedDeepFetch(
   return false;
 }
 
+const rolloverSubscribers = new Set<() => void>();
+let rolloverTimer: ReturnType<typeof setTimeout> | null = null;
+let rolloverLastDay: string | null = null;
+let rolloverVisibilityBound = false;
+
+function notifyRollover() {
+  for (const cb of rolloverSubscribers) {
+    try {
+      cb();
+    } catch {}
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("juet:quota-changed"));
+    window.dispatchEvent(new CustomEvent("juet:refresh-attendance"));
+  }
+}
+
+function scheduleRolloverTimer() {
+  if (rolloverTimer) clearTimeout(rolloverTimer);
+  if (rolloverSubscribers.size === 0 || typeof window === "undefined") {
+    rolloverTimer = null;
+    return;
+  }
+  const ms = getMsUntilNextPortalDay() + 500;
+  rolloverTimer = setTimeout(() => {
+    rolloverLastDay = getPortalDayKey();
+    notifyRollover();
+    scheduleRolloverTimer();
+  }, ms);
+}
+
+function handleRolloverVisibility() {
+  if (typeof document !== "undefined" && document.visibilityState === "visible") {
+    const currentDay = getPortalDayKey();
+    if (rolloverLastDay !== null && currentDay !== rolloverLastDay) {
+      rolloverLastDay = currentDay;
+      notifyRollover();
+    }
+    scheduleRolloverTimer();
+  }
+}
+
 /**
  * Automatically roll over quota and trigger revalidation when a tab is kept open overnight across 02:00 AM IST.
+ * Multiplexed across a single shared timer and visibility listener so concurrent subscribers never duplicate events.
  */
 export function subscribePortalDayRollover(callback: () => void): () => void {
   if (typeof window === "undefined") return () => {};
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let lastDay = getPortalDayKey();
-  const schedule = () => {
-    if (timer) clearTimeout(timer);
-    const ms = getMsUntilNextPortalDay() + 500;
-    timer = setTimeout(() => {
-      lastDay = getPortalDayKey();
-      callback();
-      window.dispatchEvent(new CustomEvent("juet:quota-changed"));
-      window.dispatchEvent(new CustomEvent("juet:refresh-attendance"));
-      schedule();
-    }, ms);
-  };
-  schedule();
-  const handleVisibility = () => {
-    if (typeof document !== "undefined" && document.visibilityState === "visible") {
-      const currentDay = getPortalDayKey();
-      if (currentDay !== lastDay) {
-        lastDay = currentDay;
-        callback();
-        window.dispatchEvent(new CustomEvent("juet:quota-changed"));
-        window.dispatchEvent(new CustomEvent("juet:refresh-attendance"));
-      }
-      if (timer) clearTimeout(timer);
-      schedule();
+  const wasEmpty = rolloverSubscribers.size === 0;
+  rolloverSubscribers.add(callback);
+
+  if (wasEmpty) {
+    rolloverLastDay = getPortalDayKey();
+    scheduleRolloverTimer();
+    if (typeof document !== "undefined" && !rolloverVisibilityBound) {
+      document.addEventListener("visibilitychange", handleRolloverVisibility);
+      rolloverVisibilityBound = true;
     }
-  };
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", handleVisibility);
   }
+
   return () => {
-    if (timer) clearTimeout(timer);
-    if (typeof document !== "undefined") {
-      document.removeEventListener("visibilitychange", handleVisibility);
+    rolloverSubscribers.delete(callback);
+    if (rolloverSubscribers.size === 0) {
+      if (rolloverTimer) {
+        clearTimeout(rolloverTimer);
+        rolloverTimer = null;
+      }
+      if (typeof document !== "undefined" && rolloverVisibilityBound) {
+        document.removeEventListener("visibilitychange", handleRolloverVisibility);
+        rolloverVisibilityBound = false;
+      }
+      rolloverLastDay = null;
     }
   };
 }

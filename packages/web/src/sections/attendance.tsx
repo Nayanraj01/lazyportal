@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { features } from "@juet/core";
 import { client } from "../lib/portal";
 import { useFeature, setCached, getCached, sessionCacheKey } from "../hooks/useFeature";
@@ -68,30 +68,36 @@ export function CombinedClassLog({
 }) {
   const [filter, setFilter] = useState<"all" | "absent" | "present">("all");
 
-  const parsedEntries = Object.entries(data)
-    .map(([type, raw]) => ({ type, stats: parseClassLogs(raw, type) }))
-    .filter((item): item is { type: string; stats: NonNullable<ReturnType<typeof parseClassLogs>> } => item.stats !== null);
+  const { total, attended, absent, allClasses } = useMemo(() => {
+    const parsedEntries = Object.entries(data)
+      .map(([type, raw]) => ({ type, stats: parseClassLogs(raw, type) }))
+      .filter((item): item is { type: string; stats: NonNullable<ReturnType<typeof parseClassLogs>> } => item.stats !== null);
 
-  if (parsedEntries.length === 0) {
+    let tot = 0;
+    let att = 0;
+    const classes: { record: ClassRecord; ts: number }[] = [];
+
+    for (const { stats } of parsedEntries) {
+      tot += stats.total;
+      att += stats.attended;
+      for (const c of stats.classes) {
+        classes.push({ record: c, ts: parseIndianDateTime(c.datetime) ?? 0 });
+      }
+    }
+
+    classes.sort((a, b) => b.ts - a.ts);
+
+    return {
+      total: tot,
+      attended: att,
+      absent: tot - att,
+      allClasses: classes.map((item) => item.record),
+    };
+  }, [data]);
+
+  if (total === 0 && allClasses.length === 0) {
     return <p className="muted">No class records available.</p>;
   }
-
-  let total = 0;
-  let attended = 0;
-  const allClasses: ClassRecord[] = [];
-
-  for (const { stats } of parsedEntries) {
-    total += stats.total;
-    attended += stats.attended;
-    for (const c of stats.classes) {
-      allClasses.push(c);
-    }
-  }
-
-  allClasses.sort((a, b) => (parseIndianDateTime(b.datetime) ?? 0) - (parseIndianDateTime(a.datetime) ?? 0));
-
-  const absent = total - attended;
-  const percentage = total > 0 ? ((attended / total) * 100).toFixed(1) : null;
 
   const filtered = allClasses.filter((c) => {
     if (filter === "absent") return !c.isAttended;
@@ -160,17 +166,20 @@ export function subjectName(code?: string): { name: string; badge: string } {
 }
 
 /** Stable per-row subject id for cache keys, sync sets, and React keys. */
-export function rowSubId(r: Record<string, unknown>): string {
-  return String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode);
+export function rowSubId(r?: Record<string, unknown> | null): string {
+  if (!r) return "";
+  return String(r.subjectid ?? r.individualsubjectcode ?? r.subjectcode ?? "");
 }
+
+export const subjectRowId = rowSubId;
 
 export function getSubjectCacheKey(
   username: string,
   registrationid: string | undefined | null,
-  row: AttRow & Record<string, unknown>,
+  rowOrId: (AttRow & Record<string, unknown>) | string,
   instituteid?: string | null,
 ): string {
-  const subId = rowSubId(row);
+  const subId = typeof rowOrId === "string" ? rowOrId : rowSubId(rowOrId);
   return sessionCacheKey("att.subject", { username, instituteid }, registrationid ?? "default", subId);
 }
 
@@ -183,10 +192,10 @@ export interface SubjectDetailCacheEntry {
 export function getCachedSubjectDetailEntry(
   username: string,
   registrationid: string | undefined | null,
-  row: AttRow & Record<string, unknown>,
+  rowOrId: (AttRow & Record<string, unknown>) | string,
   instituteid?: string | null,
 ): SubjectDetailCacheEntry {
-  const key = getSubjectCacheKey(username, registrationid, row, instituteid);
+  const key = getSubjectCacheKey(username, registrationid, rowOrId, instituteid);
   const cached = getCached<Record<string, Record<string, unknown>>>(key);
   return {
     data: cached.data,
@@ -198,10 +207,10 @@ export function getCachedSubjectDetailEntry(
 export function getCachedSubjectDetail(
   username: string,
   registrationid: string | undefined | null,
-  row: AttRow & Record<string, unknown>,
+  rowOrId: (AttRow & Record<string, unknown>) | string,
   instituteid?: string | null,
 ): Record<string, Record<string, unknown>> | null {
-  return getCachedSubjectDetailEntry(username, registrationid, row, instituteid).data;
+  return getCachedSubjectDetailEntry(username, registrationid, rowOrId, instituteid).data;
 }
 
 export function setCachedSubjectDetail(
